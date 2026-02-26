@@ -5,6 +5,7 @@ import type { AppMode } from '../types/index.js';
 interface TabBarProps {
   currentMode: AppMode;
   onModeChange: (mode: AppMode) => void;
+  isDockerConnected: boolean;
 }
 
 const tabs: { key: string; label: string; mode: AppMode }[] = [
@@ -22,7 +23,7 @@ const tabs: { key: string; label: string; mode: AppMode }[] = [
  * @param {(mode: AppMode) => void} props.onModeChange - Mode change callback.
  * @return {JSX.Element} Tab bar UI.
  */
-export function TabBar({ currentMode, onModeChange }: TabBarProps) {
+export function TabBar({ currentMode, onModeChange, isDockerConnected }: TabBarProps) {
   void onModeChange;
 
   return (
@@ -38,7 +39,12 @@ export function TabBar({ currentMode, onModeChange }: TabBarProps) {
           </Text>
         ))}
       </Box>
-      <Text color="gray">C Tutor</Text>
+      <Box gap={2}>
+        <Text color={isDockerConnected ? 'green' : 'red'}>
+          {isDockerConnected ? 'Docker 연결됨' : 'Docker 연결 해제됨'}
+        </Text>
+        <Text color="gray">C Tutor</Text>
+      </Box>
     </Box>
   );
 }

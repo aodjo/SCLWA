@@ -29,6 +29,7 @@ export function App() {
   const [isCompiling] = useState(false);
   const [skillLevel, setSkillLevel] = useState<SkillLevel>('beginner');
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [isDockerConnected, setIsDockerConnected] = useState(false);
 
   useEffect(() => {
     void checkSession();
@@ -46,11 +47,26 @@ export function App() {
       if (progress.assessment) {
         setSkillLevel(progress.assessment.skillLevel);
         setAppState('main');
+        void refreshDockerStatus();
         return;
       }
     }
     setAppState('connecting');
     await connectToGemini();
+  };
+
+  /**
+   * Refreshes Docker readiness state and updates UI connection badge.
+   *
+   * @return {Promise<void>} Resolves after docker status is checked.
+   */
+  const refreshDockerStatus = async (): Promise<void> => {
+    try {
+      await ensureDockerReady();
+      setIsDockerConnected(true);
+    } catch {
+      setIsDockerConnected(false);
+    }
   };
 
   /**
@@ -61,10 +77,12 @@ export function App() {
   const connectToGemini = async (): Promise<void> => {
     try {
       await ensureDockerReady();
+      setIsDockerConnected(true);
       const client = await getGeminiClient();
       await client.start();
       setAppState('assessment');
     } catch (err) {
+      setIsDockerConnected(false);
       setConnectionError(err instanceof Error ? err.message : 'Failed to initialize services');
     }
   };
@@ -147,7 +165,7 @@ export function App() {
 
   return (
     <Box flexDirection="column" width="100%" height="100%">
-      <TabBar currentMode={mode} onModeChange={setMode} />
+      <TabBar currentMode={mode} onModeChange={setMode} isDockerConnected={isDockerConnected} />
       <Layout mode={mode} code={code} onCodeChange={setCode} skillLevel={skillLevel} />
       <StatusBar output={output} isCompiling={isCompiling} />
     </Box>
