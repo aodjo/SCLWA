@@ -11,14 +11,14 @@ export interface AssessmentQuestion {
   hints: string[];
 }
 
-const ASSESSMENT_PROMPT = `Create one C-language diagnostic assessment question.
+const ASSESSMENT_PROMPT = `C 언어 진단 평가용 문제를 1개 생성해 주세요.
 
-Constraints:
-- Category: {category}
-- Difficulty: {difficulty} (1=easy, 2=medium, 3=hard)
-- Prefer output-tracing or runtime reasoning problems
-- Include answer and short hints
-- Return data that matches the output schema`;
+조건:
+- 카테고리: {category}
+- 난이도: {difficulty} (1=쉬움, 2=보통, 3=어려움)
+- 코드 실행 결과/동작을 추론하는 문제
+- 문제 설명과 힌트는 한국어로 작성
+- 응답은 반드시 출력 스키마를 만족`;
 
 const CATEGORIES: AssessmentQuestion['category'][] = [
   'basics',
@@ -28,8 +28,9 @@ const CATEGORIES: AssessmentQuestion['category'][] = [
   'structs',
 ];
 
-const DEFAULT_QUESTION = 'What is the output of the following C code?';
-const DEFAULT_HINT = 'Check variable values and execution order step by step.';
+const DEFAULT_QUESTION = '다음 C 코드의 출력 결과는 무엇인가요?';
+const DEFAULT_HINT = '변수 값과 실행 순서를 한 줄씩 따라가 보세요.';
+const DEFAULT_CODE = 'int x = 5;\\nprintf("%d", x);';
 
 const ASSESSMENT_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -42,12 +43,12 @@ const ASSESSMENT_OUTPUT_SCHEMA: Record<string, unknown> = {
       items: { type: 'string' },
     },
   },
-  required: ['question', 'answer', 'hints'],
+  required: ['question', 'code', 'answer', 'hints'],
 };
 
 interface AssessmentPayload {
   question: string;
-  code?: string;
+  code: string;
   answer: string;
   hints: string[];
 }
@@ -80,12 +81,12 @@ function parseJsonObject(rawText: string): Record<string, unknown> {
 
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('No JSON object found in model output.');
+    throw new Error('모델 출력에서 JSON 객체를 찾을 수 없습니다.');
   }
 
   const parsed = JSON.parse(jsonMatch[0]) as unknown;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Parsed JSON is not an object.');
+    throw new Error('파싱된 JSON이 객체 형태가 아닙니다.');
   }
 
   return parsed as Record<string, unknown>;
@@ -106,7 +107,7 @@ function normalizeAssessmentPayload(parsed: Record<string, unknown>): Assessment
   const code =
     typeof parsed.code === 'string' && parsed.code.trim().length > 0
       ? parsed.code
-      : undefined;
+      : DEFAULT_CODE;
 
   const answer = typeof parsed.answer === 'string' ? parsed.answer : '';
 
@@ -147,7 +148,7 @@ async function generateQuestionStructured(prompt: string): Promise<AssessmentPay
  */
 async function generateQuestionFallback(prompt: string): Promise<AssessmentPayload> {
   const client = getCodexClient();
-  const fallbackPrompt = `${prompt}\n\nReturn only one JSON object. Do not use markdown.`;
+  const fallbackPrompt = `${prompt}\n\nJSON 객체 하나만 응답하세요. 마크다운 코드블록은 사용하지 마세요.`;
   const result = await client.runTurn({ prompt: fallbackPrompt });
 
   const parsed = parseJsonObject(result.text);
@@ -196,7 +197,7 @@ export async function generateQuestion(
       };
     } catch (fallbackError) {
       throw new Error(
-        `���� ���� ����: structured=${toErrorMessage(structuredError)}; fallback=${toErrorMessage(fallbackError)}`
+        `문제 생성 실패: structured=${toErrorMessage(structuredError)}; fallback=${toErrorMessage(fallbackError)}`
       );
     }
   }
@@ -298,11 +299,11 @@ export function calculateAssessmentResult(
     .map(([category]) => category);
 
   const topicMap: Record<string, string> = {
-    basics: 'basic syntax',
-    arrays: 'arrays',
-    pointers: 'pointers',
-    structs: 'structs',
-    functions: 'functions',
+    basics: '기초 문법',
+    arrays: '배열',
+    pointers: '포인터',
+    structs: '구조체',
+    functions: '함수',
   };
 
   const recommendedTopics = weakAreas.map((area) => topicMap[area] || area);

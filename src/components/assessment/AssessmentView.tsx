@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import type { ComponentType } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
+import * as SyntaxHighlightModule from 'ink-syntax-highlight';
 import {
   generateQuestion,
   calculateAssessmentResult,
@@ -10,7 +12,6 @@ import {
 import { saveAssessment } from '../../services/storage.js';
 import type { AssessmentResult } from '../../types/index.js';
 import { ResultView } from './ResultView.js';
-import { HighlightedLine } from '../CodeEditor.js';
 
 interface AssessmentViewProps {
   onComplete: (result: AssessmentResult) => void;
@@ -23,9 +24,44 @@ const CATEGORIES: AssessmentQuestion['category'][] = [
   'functions',
   'structs',
 ];
+const CATEGORY_LABELS: Record<AssessmentQuestion['category'], string> = {
+  basics: '기초',
+  arrays: '배열',
+  pointers: '포인터',
+  functions: '함수',
+  structs: '구조체',
+};
 
 const TOTAL_QUESTIONS = 5;
 type Phase = 'generating' | 'answering' | 'result';
+
+type SyntaxHighlightProps = {
+  code: string;
+  language?: string;
+};
+
+const SyntaxHighlight =
+  (('default' in SyntaxHighlightModule
+    ? SyntaxHighlightModule.default
+    : SyntaxHighlightModule) as unknown as ComponentType<SyntaxHighlightProps>);
+
+/**
+ * Renders one syntax-highlighted code line with line number.
+ *
+ * @param {{ line: string; lineNumber: number }} props - Line rendering props.
+ * @param {string} props.line - Raw source line.
+ * @param {number} props.lineNumber - 1-based line number.
+ * @return {JSX.Element} Highlighted line row.
+ */
+function AssessmentCodeLine({ line, lineNumber }: { line: string; lineNumber: number }) {
+  return (
+    <Box>
+      <Text color="gray">{String(lineNumber).padStart(3, ' ')}</Text>
+      <Text color="gray"> | </Text>
+      <SyntaxHighlight code={line.length > 0 ? line : ' '} language="c" />
+    </Box>
+  );
+}
 
 /**
  * Runs onboarding assessment flow from question generation to final result.
@@ -68,7 +104,7 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
       setCurrentQuestion(question);
       setPhase('answering');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate question');
+      setError(err instanceof Error ? err.message : '문제 생성에 실패했습니다.');
     }
   };
 
@@ -116,7 +152,7 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
       <Box flexDirection="column">
         <Box borderStyle="round" borderColor="gray" flexDirection="column">
           <Box paddingX={2} justifyContent="space-between">
-            <Text bold color="cyan">C Skill Assessment</Text>
+            <Text bold color="cyan">C 진단 평가</Text>
             <Text color="gray">{currentIndex + 1}/{TOTAL_QUESTIONS}</Text>
           </Box>
           <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
@@ -124,12 +160,12 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
             {error ? (
               <Box flexDirection="column">
                 <Text color="red">{error}</Text>
-                <Text color="gray">R: retry</Text>
+                <Text color="gray">R: 재시도</Text>
               </Box>
             ) : (
               <Box>
                 <Text color="cyan"><Spinner type="dots" /></Text>
-                <Text> Generating question...</Text>
+                <Text> 문제 생성 중...</Text>
               </Box>
             )}
           </Box>
@@ -143,7 +179,7 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
   }
 
   if (!currentQuestion) {
-    return <Text color="red">Could not load question.</Text>;
+    return <Text color="red">문제를 불러올 수 없습니다.</Text>;
   }
 
   const questionCodeLines = currentQuestion.code
@@ -154,10 +190,10 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
     <Box flexDirection="column">
       <Box borderStyle="round" borderColor="gray" flexDirection="column">
         <Box paddingX={2} justifyContent="space-between">
-          <Text bold color="cyan">C Skill Assessment</Text>
+          <Text bold color="cyan">C 진단 평가</Text>
           <Box>
             <Text color="gray">{currentIndex + 1}/{TOTAL_QUESTIONS}</Text>
-            <Text color="yellow"> {currentQuestion.category}</Text>
+            <Text color="yellow"> {CATEGORY_LABELS[currentQuestion.category]}</Text>
           </Box>
         </Box>
 
@@ -167,12 +203,8 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
           <Text>{currentQuestion.question}</Text>
           {currentQuestion.code && (
             <Box marginTop={1} flexDirection="column">
-              {questionCodeLines.map((line, i) => (
-                <Box key={i}>
-                  <Text color="gray">{String(i + 1).padStart(3, ' ')}</Text>
-                  <Text color="gray"> | </Text>
-                  <HighlightedLine line={line} />
-                </Box>
+              {questionCodeLines.map((line, index) => (
+                <AssessmentCodeLine key={index} line={line} lineNumber={index + 1} />
               ))}
             </Box>
           )}
@@ -182,7 +214,7 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
 
         {showHint && currentQuestion.hints[0] && (
           <Box paddingX={2}>
-            <Text color="yellow" wrap="wrap">Hint: {currentQuestion.hints[0]}</Text>
+            <Text color="yellow" wrap="wrap">힌트: {currentQuestion.hints[0]}</Text>
           </Box>
         )}
 
@@ -192,14 +224,14 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
             value={input}
             onChange={setInput}
             onSubmit={handleSubmit}
-            placeholder="Type answer"
+            placeholder="정답 입력"
           />
         </Box>
 
         <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
 
         <Box paddingX={2}>
-          <Text color="gray">H: hint</Text>
+          <Text color="gray">H: 힌트</Text>
         </Box>
       </Box>
     </Box>

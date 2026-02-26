@@ -23,39 +23,39 @@ export function ResultView({ result, onContinue }: ResultViewProps) {
   });
 
   const levelLabels: Record<string, string> = {
-    beginner: 'Beginner',
-    intermediate: 'Intermediate',
-    advanced: 'Advanced',
+    beginner: '초급',
+    intermediate: '중급',
+    advanced: '고급',
   };
 
   return (
     <Box flexDirection="column" padding={2}>
-      <Text bold color="green">Assessment Complete</Text>
+      <Text bold color="green">진단 평가 완료</Text>
 
       <Box borderStyle="round" borderColor="gray" paddingX={2} paddingY={1} marginY={1} flexDirection="column">
         <Box>
-          <Text>Level: </Text>
+          <Text>레벨: </Text>
           <Text bold color="cyan">{levelLabels[result.skillLevel]}</Text>
         </Box>
 
         <Box marginTop={1} flexDirection="column">
-          <Text color="gray">Scores by category</Text>
-          <ScoreBar label="Basics" score={result.scores.basics} />
-          <ScoreBar label="Arrays" score={result.scores.arrays} />
-          <ScoreBar label="Pointers" score={result.scores.pointers} />
-          <ScoreBar label="Structs" score={result.scores.structs} />
-          <ScoreBar label="Functions" score={result.scores.functions} />
+          <Text color="gray">영역별 점수</Text>
+          <ScoreBar label="기초" score={result.scores.basics} />
+          <ScoreBar label="배열" score={result.scores.arrays} />
+          <ScoreBar label="포인터" score={result.scores.pointers} />
+          <ScoreBar label="구조체" score={result.scores.structs} />
+          <ScoreBar label="함수" score={result.scores.functions} />
         </Box>
       </Box>
 
       {result.weakAreas.length > 0 && (
         <Box flexDirection="column">
-          <Text color="yellow">Needs work:</Text>
+          <Text color="yellow">보완 필요:</Text>
           <Text color="gray">{result.recommendedTopics.join(', ')}</Text>
         </Box>
       )}
 
-      <Text color="gray">Press Enter to continue</Text>
+      <Text color="gray">Enter를 눌러 계속</Text>
     </Box>
   );
 }
@@ -81,9 +81,9 @@ function ScoreBar({ label, score }: { label: string; score: number }) {
 
   return (
     <Box>
-      <Text>{label.padEnd(9)}</Text>
-      <Text color={color}>{'?'.repeat(filled)}</Text>
-      <Text color="gray">{'?'.repeat(empty)}</Text>
+      <Text>{label.padEnd(5)}</Text>
+      <Text color={color}>{'#'.repeat(filled)}</Text>
+      <Text color="gray">{'-'.repeat(empty)}</Text>
       <Text color="gray"> {score}%</Text>
     </Box>
   );
