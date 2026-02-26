@@ -11,6 +11,7 @@ import { saveAssessment } from '../../services/storage.js';
 import type { AssessmentResult } from '../../types/index.js';
 import { ResultView } from './ResultView.js';
 import { HighlightedLine } from '../CodeEditor.js';
+import { splitGeneratedCodeLines } from '../../services/code-format.js';
 
 interface AssessmentViewProps {
   onComplete: (result: AssessmentResult) => void;
@@ -172,7 +173,7 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
   }
 
   const questionCodeLines = currentQuestion.code
-    ? currentQuestion.code.replace(/\\n/g, '\n').split('\n')
+    ? splitGeneratedCodeLines(currentQuestion.code)
     : [];
 
   return (

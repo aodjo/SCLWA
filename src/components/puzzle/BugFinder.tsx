@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Puzzle } from '../../types/index.js';
+import { splitGeneratedCodeLines } from '../../services/code-format.js';
 
 interface BugFinderProps {
   puzzle: Puzzle;
@@ -23,7 +24,7 @@ export function BugFinder({ puzzle, onComplete }: BugFinderProps) {
   const [isCorrect, setIsCorrect] = useState(false);
   const [showHint, setShowHint] = useState(false);
 
-  const lines = puzzle.code.replace(/\\n/g, '\n').split('\n');
+  const lines = splitGeneratedCodeLines(puzzle.code);
 
   useInput((char, key) => {
     if (phase !== 'select') {

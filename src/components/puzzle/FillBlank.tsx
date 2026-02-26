@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Puzzle } from '../../types/index.js';
+import { splitGeneratedCodeLines } from '../../services/code-format.js';
 
 interface FillBlankProps {
   puzzle: Puzzle;
@@ -88,7 +89,7 @@ export function FillBlank({ puzzle, onComplete }: FillBlankProps) {
       <Text color="gray">{puzzle.description}</Text>
 
       <Box borderStyle="round" borderColor="gray" paddingX={2} paddingY={1} marginTop={1} flexDirection="column">
-        {renderCodeWithBlanks().replace(/\\n/g, '\n').split('\n').map((line, i) => (
+        {splitGeneratedCodeLines(renderCodeWithBlanks()).map((line, i) => (
           <Text key={i} color="green">{line}</Text>
         ))}
       </Box>
