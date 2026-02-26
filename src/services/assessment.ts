@@ -35,8 +35,60 @@ const CATEGORIES: AssessmentQuestion['category'][] = [
   'structs',
 ];
 
+const ASSESSMENT_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    question: { type: 'string' },
+    code: { type: 'string' },
+    answer: { type: 'string' },
+    hints: {
+      type: 'array',
+      items: { type: 'string' },
+      minItems: 1,
+      maxItems: 3,
+    },
+  },
+  required: ['question', 'answer', 'hints'],
+  additionalProperties: false,
+};
+
 /**
- * Uses Codex to generate one assessment question for a specific category and difficulty.
+ * Parses structured-output JSON text from Codex and normalizes its fields.
+ *
+ * @param {string} rawText - Raw `runTurn().text` value expected to be JSON.
+ * @return {{ question: string; code?: string; answer: string; hints: string[] }} Parsed question payload.
+ */
+function parseStructuredAssessmentQuestion(
+  rawText: string
+): { question: string; code?: string; answer: string; hints: string[] } {
+  const parsed = JSON.parse(rawText) as Record<string, unknown>;
+
+  const question =
+    typeof parsed.question === 'string' && parsed.question.trim()
+      ? parsed.question
+      : '?ㅼ쓬 肄붾뱶??異쒕젰 寃곌낵??';
+
+  const code =
+    typeof parsed.code === 'string' && parsed.code.trim()
+      ? parsed.code
+      : undefined;
+
+  const answer = typeof parsed.answer === 'string' ? parsed.answer : '';
+
+  const hints = Array.isArray(parsed.hints)
+    ? parsed.hints.filter((hint): hint is string => typeof hint === 'string' && hint.trim().length > 0)
+    : [];
+
+  return {
+    question,
+    code,
+    answer,
+    hints,
+  };
+}
+
+/**
+ * Uses Codex structured output to generate one assessment question for a specific category and difficulty.
  *
  * @param {AssessmentQuestion['category']} category - Topic bucket for the generated question.
  * @param {1 | 2 | 3} difficulty - Difficulty level where 1 is easiest and 3 is hardest.
@@ -52,14 +104,11 @@ export async function generateQuestion(
 
   try {
     const client = getCodexClient();
-    const result = await client.runTurn({ prompt });
-
-    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Invalid response');
-    }
-
-    const data = JSON.parse(jsonMatch[0]);
+    const result = await client.runTurn({
+      prompt,
+      outputSchema: ASSESSMENT_OUTPUT_SCHEMA,
+    });
+    const data = parseStructuredAssessmentQuestion(result.text);
 
     return {
       id: `${category}-${Date.now()}`,
