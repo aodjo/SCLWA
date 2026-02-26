@@ -4,7 +4,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import type { Progress, AssessmentResult, ChatMessage } from '../types/index.js';
 
-const STORAGE_DIR = join(homedir(), '.c-tutor');
+const STORAGE_DIR = join(homedir(), '.sclwa');
 const PROGRESS_FILE = join(STORAGE_DIR, 'progress.json');
 const CONFIG_FILE = join(STORAGE_DIR, 'config.json');
 const HISTORY_DIR = join(STORAGE_DIR, 'history');

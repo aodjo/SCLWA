@@ -14,7 +14,7 @@ export async function ensureGeminiApiKey(): Promise<void> {
   }
 
   if (!input.isTTY || !output.isTTY) {
-    throw new Error('Gemini API 키가 없고 대화형 입력이 불가능합니다. ~/.c-tutor/config.json에 키를 설정하세요.');
+    throw new Error('Gemini API 키가 없고 대화형 입력이 불가능합니다. ~/.sclwa/config.json에 키를 설정하세요.');
   }
 
   const rl = createInterface({ input, output });
