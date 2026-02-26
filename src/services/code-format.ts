@@ -6,8 +6,19 @@
  * @return {string[]} Line array for UI rendering.
  */
 export function splitGeneratedCodeLines(rawCode: string): string[] {
-  const normalized = normalizeEscapedNewlinesOutsideLiterals(rawCode);
+  const normalized = normalizeGeneratedCode(rawCode);
   return normalized.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+}
+
+/**
+ * Normalizes generated C code so escaped newlines outside literals become
+ * executable line breaks while preserving escapes inside literals.
+ *
+ * @param {string} rawCode - Raw code text from model output.
+ * @return {string} Normalized executable C code text.
+ */
+export function normalizeGeneratedCode(rawCode: string): string {
+  return normalizeEscapedNewlinesOutsideLiterals(rawCode);
 }
 
 /**
@@ -87,4 +98,3 @@ function normalizeEscapedNewlinesOutsideLiterals(source: string): string {
 
   return result;
 }
-

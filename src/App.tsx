@@ -8,6 +8,7 @@ import { StatusBar } from './components/StatusBar.js';
 import { AssessmentView } from './components/assessment/AssessmentView.js';
 import { hasExistingSession, loadProgress } from './services/storage.js';
 import { getGeminiClient } from './services/gemini-client.js';
+import { ensureDockerReady } from './services/docker-runner.js';
 
 type AppState = 'loading' | 'connecting' | 'assessment' | 'main';
 
@@ -59,11 +60,12 @@ export function App() {
    */
   const connectToGemini = async (): Promise<void> => {
     try {
+      await ensureDockerReady();
       const client = await getGeminiClient();
       await client.start();
       setAppState('assessment');
     } catch (err) {
-      setConnectionError(err instanceof Error ? err.message : 'Failed to connect Gemini');
+      setConnectionError(err instanceof Error ? err.message : 'Failed to initialize services');
     }
   };
 
@@ -122,7 +124,7 @@ export function App() {
             <>
               <Text color="red">{connectionError}</Text>
               <Box marginTop={1} flexDirection="column">
-                <Text color="gray">저장된 Gemini API 키를 확인하세요.</Text>
+                <Text color="gray">Gemini API 키와 Docker 실행 상태를 확인하세요.</Text>
               </Box>
               <Box marginTop={1}>
                 <Text color="gray">R: retry | S: start without Gemini</Text>
@@ -131,7 +133,7 @@ export function App() {
           ) : (
             <Box>
               <Text color="cyan"><Spinner type="dots" /></Text>
-              <Text> Connecting to Gemini...</Text>
+              <Text> Initializing Gemini and Docker...</Text>
             </Box>
           )}
         </Box>

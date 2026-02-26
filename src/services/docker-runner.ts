@@ -8,6 +8,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMP_DIR = join(__dirname, '../../temp');
 const TIMEOUT_SECONDS = 5;
 const DOCKER_IMAGE = 'c-tutor-runner';
+const DOCKER_SMOKE_OUTPUT = 'docker-ready';
+let dockerImageReady = false;
+let dockerRuntimeReady = false;
 
 /**
  * Checks whether the required Docker image already exists locally.
@@ -45,6 +48,24 @@ async function buildDockerImage(): Promise<void> {
 }
 
 /**
+ * Ensures Docker image for execution exists locally.
+ *
+ * @return {Promise<void>} Resolves when execution image is available.
+ */
+async function ensureDockerImageReady(): Promise<void> {
+  if (dockerImageReady) {
+    return;
+  }
+
+  const imageExists = await checkDockerImage();
+  if (!imageExists) {
+    await buildDockerImage();
+  }
+
+  dockerImageReady = true;
+}
+
+/**
  * Compiles and runs C code inside an isolated Docker container.
  *
  * @param {string} code - C source code to compile and execute.
@@ -58,17 +79,14 @@ export async function runCCode(code: string): Promise<CompileResult> {
 
   await writeFile(sourceFile, code, 'utf-8');
 
-  const imageExists = await checkDockerImage();
-  if (!imageExists) {
-    try {
-      await buildDockerImage();
-    } catch {
-      return {
-        success: false,
-        error: 'Failed to build Docker image. Is Docker running?',
-        exitCode: -1,
-      };
-    }
+  try {
+    await ensureDockerImageReady();
+  } catch {
+    return {
+      success: false,
+      error: 'Failed to build Docker image. Is Docker running?',
+      exitCode: -1,
+    };
   }
 
   return new Promise((resolve) => {
@@ -145,6 +163,36 @@ export async function runCCode(code: string): Promise<CompileResult> {
       });
     });
   });
+}
+
+/**
+ * Prepares Docker runtime once at startup and validates execution with a smoke test.
+ *
+ * @return {Promise<void>} Resolves when Docker execution is fully ready.
+ */
+export async function ensureDockerReady(): Promise<void> {
+  if (dockerRuntimeReady) {
+    return;
+  }
+
+  try {
+    await ensureDockerImageReady();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Docker 준비 실패: ${message}`);
+  }
+
+  const smokeCode = '#include <stdio.h>\nint main() { printf("docker-ready"); return 0; }';
+  const smokeResult = await runCCode(smokeCode);
+  if (!smokeResult.success) {
+    throw new Error(`Docker 실행 확인 실패: ${smokeResult.error || 'unknown error'}`);
+  }
+
+  if ((smokeResult.output || '').trim() !== DOCKER_SMOKE_OUTPUT) {
+    throw new Error(`Docker 실행 출력이 예상과 다릅니다: ${smokeResult.output || '(empty)'}`);
+  }
+
+  dockerRuntimeReady = true;
 }
 
 /**

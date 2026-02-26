@@ -1,4 +1,6 @@
 import { getGeminiClient } from './gemini-client.js';
+import { ensureDockerReady, runCCode } from './docker-runner.js';
+import { normalizeGeneratedCode } from './code-format.js';
 import type { AssessmentResult, SkillLevel } from '../types/index.js';
 
 export interface AssessmentQuestion {
@@ -124,6 +126,39 @@ function normalizeAssessmentPayload(parsed: Record<string, unknown>): Assessment
 }
 
 /**
+ * Wraps generated code into an executable C program when `main` is missing.
+ *
+ * @param {string} rawCode - Generated C code text.
+ * @return {string} Executable C source code.
+ */
+function toExecutableCode(rawCode: string): string {
+  const normalized = normalizeGeneratedCode(rawCode);
+  if (/\bmain\s*\(/.test(normalized)) {
+    return normalized;
+  }
+
+  return `#include <stdio.h>\nint main() {\n${normalized}\nreturn 0;\n}`;
+}
+
+/**
+ * Executes generated code in Docker and returns runtime output as canonical answer.
+ *
+ * @param {string} rawCode - Generated code from model output.
+ * @return {Promise<string>} Runtime output used for grading.
+ */
+async function resolveAnswerByExecution(rawCode: string): Promise<string> {
+  await ensureDockerReady();
+  const executableCode = toExecutableCode(rawCode);
+  const execution = await runCCode(executableCode);
+
+  if (!execution.success) {
+    throw new Error(`코드 실행 검증 실패: ${execution.error || 'unknown error'}`);
+  }
+
+  return (execution.output || '').trim();
+}
+
+/**
  * Generates one question with structured output enabled.
  *
  * @param {string} prompt - Prepared question-generation prompt.
@@ -176,6 +211,7 @@ export async function generateQuestion(
 
   try {
     const data = await generateQuestionStructured(prompt);
+    const verifiedAnswer = await resolveAnswerByExecution(data.code);
 
     return {
       id: `${category}-${Date.now()}`,
@@ -183,12 +219,13 @@ export async function generateQuestion(
       difficulty,
       question: data.question,
       code: data.code,
-      answer: data.answer,
+      answer: verifiedAnswer,
       hints: data.hints,
     };
   } catch (structuredError) {
     try {
       const data = await generateQuestionFallback(prompt);
+      const verifiedAnswer = await resolveAnswerByExecution(data.code);
 
       return {
         id: `${category}-${Date.now()}`,
@@ -196,7 +233,7 @@ export async function generateQuestion(
         difficulty,
         question: data.question,
         code: data.code,
-        answer: data.answer,
+        answer: verifiedAnswer,
         hints: data.hints,
       };
     } catch (fallbackError) {
