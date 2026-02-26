@@ -30,6 +30,7 @@ export function App() {
   const [skillLevel, setSkillLevel] = useState<SkillLevel>('beginner');
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isDockerConnected, setIsDockerConnected] = useState(false);
+  const [postConnectState, setPostConnectState] = useState<'assessment' | 'main'>('assessment');
 
   useEffect(() => {
     void checkSession();
@@ -41,32 +42,19 @@ export function App() {
    * @return {Promise<void>} Resolves after startup state is determined.
    */
   const checkSession = async (): Promise<void> => {
+    let nextState: 'assessment' | 'main' = 'assessment';
     const hasSession = await hasExistingSession();
     if (hasSession) {
       const progress = await loadProgress();
       if (progress.assessment) {
         setSkillLevel(progress.assessment.skillLevel);
-        setAppState('main');
-        void refreshDockerStatus();
-        return;
+        nextState = 'main';
       }
     }
-    setAppState('connecting');
-    await connectToGemini();
-  };
 
-  /**
-   * Refreshes Docker readiness state and updates UI connection badge.
-   *
-   * @return {Promise<void>} Resolves after docker status is checked.
-   */
-  const refreshDockerStatus = async (): Promise<void> => {
-    try {
-      await ensureDockerReady();
-      setIsDockerConnected(true);
-    } catch {
-      setIsDockerConnected(false);
-    }
+    setPostConnectState(nextState);
+    setAppState('connecting');
+    await connectToGemini(nextState);
   };
 
   /**
@@ -74,13 +62,13 @@ export function App() {
    *
    * @return {Promise<void>} Resolves after connection attempt completes.
    */
-  const connectToGemini = async (): Promise<void> => {
+  const connectToGemini = async (nextState: 'assessment' | 'main' = postConnectState): Promise<void> => {
     try {
       await ensureDockerReady();
       setIsDockerConnected(true);
       const client = await getGeminiClient();
       await client.start();
-      setAppState('assessment');
+      setAppState(nextState);
     } catch (err) {
       setIsDockerConnected(false);
       setConnectionError(err instanceof Error ? err.message : 'Failed to initialize services');
@@ -96,9 +84,6 @@ export function App() {
       if (input === 'r') {
         setConnectionError(null);
         void connectToGemini();
-      }
-      if (input === 's') {
-        setAppState('main');
       }
     }
 
@@ -145,7 +130,7 @@ export function App() {
                 <Text color="gray">Gemini API 키와 Docker 실행 상태를 확인하세요.</Text>
               </Box>
               <Box marginTop={1}>
-                <Text color="gray">R: retry | S: start without Gemini</Text>
+                <Text color="gray">R: retry</Text>
               </Box>
             </>
           ) : (
