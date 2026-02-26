@@ -11,6 +11,62 @@ const DOCKER_IMAGE = 'c-tutor-runner';
 const DOCKER_SMOKE_OUTPUT = 'docker-ready';
 let dockerImageReady = false;
 let dockerRuntimeReady = false;
+type DockerLogListener = (line: string) => void;
+const dockerLogListeners = new Set<DockerLogListener>();
+
+/**
+ * Subscribes to docker lifecycle logs emitted by runner helpers.
+ *
+ * @param {DockerLogListener} listener - Log listener callback.
+ * @return {() => void} Unsubscribe callback.
+ */
+export function subscribeDockerLogs(listener: DockerLogListener): () => void {
+  dockerLogListeners.add(listener);
+  return () => {
+    dockerLogListeners.delete(listener);
+  };
+}
+
+/**
+ * Publishes one log line to all docker log listeners.
+ *
+ * @param {string} line - Log line text.
+ * @return {void} Dispatches log line.
+ */
+function emitDockerLog(line: string): void {
+  const normalized = line.replace(/\r/g, '').trim();
+  if (!normalized) {
+    return;
+  }
+
+  for (const listener of dockerLogListeners) {
+    listener(normalized);
+  }
+}
+
+/**
+ * Pipes process stream output into docker log listeners line-by-line.
+ *
+ * @param {NodeJS.ReadableStream} stream - Process output stream.
+ * @param {string} prefix - Prefix text per emitted line.
+ * @return {void} Attaches listeners to stream.
+ */
+function pipeStreamToDockerLogs(stream: NodeJS.ReadableStream, prefix: string): void {
+  let buffer = '';
+  stream.on('data', (chunk: Buffer | string) => {
+    buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      emitDockerLog(`${prefix}${line}`);
+    }
+  });
+  stream.on('end', () => {
+    if (buffer.trim()) {
+      emitDockerLog(`${prefix}${buffer}`);
+    }
+  });
+}
 
 /**
  * Checks whether the required Docker image already exists locally.
@@ -32,17 +88,28 @@ async function checkDockerImage(): Promise<boolean> {
  * @return {Promise<void>} Resolves on successful image build.
  */
 async function buildDockerImage(): Promise<void> {
+  emitDockerLog('Docker 이미지 빌드 시작...');
+
   return new Promise((resolve, reject) => {
     const proc = spawn('docker', ['build', '-t', DOCKER_IMAGE, '.'], {
       cwd: join(__dirname, '../..'),
-      stdio: 'inherit',
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
+    pipeStreamToDockerLogs(proc.stdout, '[docker build] ');
+    pipeStreamToDockerLogs(proc.stderr, '[docker build] ');
+
     proc.on('close', (code) => {
       if (code === 0) {
+        emitDockerLog('Docker 이미지 빌드 완료.');
         resolve();
       } else {
+        emitDockerLog(`Docker 이미지 빌드 실패 (code: ${code}).`);
         reject(new Error(`Docker build failed with code ${code}`));
       }
+    });
+    proc.on('error', (error) => {
+      emitDockerLog(`Docker 빌드 실행 오류: ${error.message}`);
+      reject(error);
     });
   });
 }
@@ -54,12 +121,17 @@ async function buildDockerImage(): Promise<void> {
  */
 async function ensureDockerImageReady(): Promise<void> {
   if (dockerImageReady) {
+    emitDockerLog('Docker 이미지 캐시 사용.');
     return;
   }
 
+  emitDockerLog('Docker 이미지 확인 중...');
   const imageExists = await checkDockerImage();
   if (!imageExists) {
+    emitDockerLog('Docker 이미지가 없어 새로 빌드합니다.');
     await buildDockerImage();
+  } else {
+    emitDockerLog('Docker 이미지가 이미 존재합니다.');
   }
 
   dockerImageReady = true;
@@ -172,6 +244,7 @@ export async function runCCode(code: string): Promise<CompileResult> {
  */
 export async function ensureDockerReady(): Promise<void> {
   if (dockerRuntimeReady) {
+    emitDockerLog('Docker 런타임 연결됨 (캐시).');
     return;
   }
 
@@ -182,16 +255,20 @@ export async function ensureDockerReady(): Promise<void> {
     throw new Error(`Docker 준비 실패: ${message}`);
   }
 
+  emitDockerLog('Docker 실행 스모크 테스트 시작...');
   const smokeCode = '#include <stdio.h>\nint main() { printf("docker-ready"); return 0; }';
   const smokeResult = await runCCode(smokeCode);
   if (!smokeResult.success) {
+    emitDockerLog(`Docker 실행 스모크 테스트 실패: ${smokeResult.error || 'unknown error'}`);
     throw new Error(`Docker 실행 확인 실패: ${smokeResult.error || 'unknown error'}`);
   }
 
   if ((smokeResult.output || '').trim() !== DOCKER_SMOKE_OUTPUT) {
+    emitDockerLog(`Docker 실행 스모크 테스트 출력 불일치: ${smokeResult.output || '(empty)'}`);
     throw new Error(`Docker 실행 출력이 예상과 다릅니다: ${smokeResult.output || '(empty)'}`);
   }
 
+  emitDockerLog('Docker 실행 준비 완료.');
   dockerRuntimeReady = true;
 }
 

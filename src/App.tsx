@@ -8,7 +8,7 @@ import { StatusBar } from './components/StatusBar.js';
 import { AssessmentView } from './components/assessment/AssessmentView.js';
 import { hasExistingSession, loadProgress } from './services/storage.js';
 import { getGeminiClient } from './services/gemini-client.js';
-import { ensureDockerReady } from './services/docker-runner.js';
+import { ensureDockerReady, subscribeDockerLogs } from './services/docker-runner.js';
 
 type AppState = 'loading' | 'connecting' | 'assessment' | 'main';
 
@@ -31,10 +31,28 @@ export function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isDockerConnected, setIsDockerConnected] = useState(false);
   const [postConnectState, setPostConnectState] = useState<'assessment' | 'main'>('assessment');
+  const [activityLogs, setActivityLogs] = useState<string[]>([]);
 
   useEffect(() => {
     void checkSession();
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeDockerLogs((line) => {
+      setActivityLogs((prev) => [...prev.slice(-79), line]);
+    });
+    return unsubscribe;
+  }, []);
+
+  /**
+   * Appends one line into startup activity log buffer.
+   *
+   * @param {string} line - Log line to append.
+   * @return {void} Updates local log state.
+   */
+  const appendActivityLog = (line: string): void => {
+    setActivityLogs((prev) => [...prev.slice(-79), line]);
+  };
 
   /**
    * Loads existing persisted session data and decides initial app state.
@@ -63,15 +81,26 @@ export function App() {
    * @return {Promise<void>} Resolves after connection attempt completes.
    */
   const connectToGemini = async (nextState: 'assessment' | 'main' = postConnectState): Promise<void> => {
+    setConnectionError(null);
+    setActivityLogs([]);
+    appendActivityLog('서비스 초기화 시작...');
+
     try {
+      appendActivityLog('Docker 준비 확인 중...');
       await ensureDockerReady();
       setIsDockerConnected(true);
+      appendActivityLog('Docker 연결 확인 완료.');
+
+      appendActivityLog('Gemini 연결 중...');
       const client = await getGeminiClient();
       await client.start();
+      appendActivityLog('Gemini 연결 완료.');
       setAppState(nextState);
     } catch (err) {
       setIsDockerConnected(false);
-      setConnectionError(err instanceof Error ? err.message : 'Failed to initialize services');
+      const message = err instanceof Error ? err.message : 'Failed to initialize services';
+      appendActivityLog(`초기화 실패: ${message}`);
+      setConnectionError(message);
     }
   };
 
@@ -108,11 +137,16 @@ export function App() {
 
   if (appState === 'loading') {
     return (
-      <Box flexDirection="column" padding={2}>
-        <Text bold color="cyan">C Tutor</Text>
-        <Box marginTop={1}>
-          <Text color="cyan"><Spinner type="dots" /></Text>
-          <Text> Starting...</Text>
+      <Box flexDirection="column">
+        <Box borderStyle="round" borderColor="gray" flexDirection="column">
+          <Box paddingX={2}>
+            <Text bold color="cyan">C Tutor</Text>
+          </Box>
+          <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
+          <Box paddingX={2} paddingY={1}>
+            <Text color="cyan"><Spinner type="dots" /></Text>
+            <Text> Starting...</Text>
+          </Box>
         </Box>
       </Box>
     );
@@ -120,26 +154,48 @@ export function App() {
 
   if (appState === 'connecting') {
     return (
-      <Box flexDirection="column" padding={2}>
-        <Text bold color="cyan">C Tutor</Text>
-        <Box marginTop={1} flexDirection="column">
-          {connectionError ? (
-            <>
-              <Text color="red">{connectionError}</Text>
-              <Box marginTop={1} flexDirection="column">
+      <Box flexDirection="column">
+        <Box borderStyle="round" borderColor="gray" flexDirection="column">
+          <Box paddingX={2} justifyContent="space-between">
+            <Text bold color="cyan">서비스 초기화</Text>
+            <Text color="gray">Gemini + Docker</Text>
+          </Box>
+          <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
+          <Box paddingX={2} paddingY={1} flexDirection="column">
+            {connectionError ? (
+              <Box flexDirection="column">
+                <Text color="red">{connectionError}</Text>
                 <Text color="gray">Gemini API 키와 Docker 실행 상태를 확인하세요.</Text>
               </Box>
-              <Box marginTop={1}>
+            ) : (
+              <Box>
+                <Text color="cyan"><Spinner type="dots" /></Text>
+                <Text> Initializing Gemini and Docker...</Text>
+              </Box>
+            )}
+          </Box>
+          <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
+          <Box paddingX={2} paddingY={1} flexDirection="column">
+            <Text color="gray">로그</Text>
+            {activityLogs.length === 0 ? (
+              <Text color="gray">(로그 없음)</Text>
+            ) : (
+              activityLogs.slice(-8).map((line, index) => (
+                <Text key={`${index}-${line.slice(0, 16)}`} color="gray" wrap="truncate-end">
+                  {line}
+                </Text>
+              ))
+            )}
+          </Box>
+          {connectionError && (
+            <>
+              <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
+              <Box paddingX={2}>
                 <Text color="gray">R: retry</Text>
               </Box>
             </>
-          ) : (
-            <Box>
-              <Text color="cyan"><Spinner type="dots" /></Text>
-              <Text> Initializing Gemini and Docker...</Text>
-            </Box>
           )}
-        </Box>
+            </Box>
       </Box>
     );
   }
