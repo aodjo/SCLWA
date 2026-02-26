@@ -11,21 +11,14 @@ export interface AssessmentQuestion {
   hints: string[];
 }
 
-const ASSESSMENT_PROMPT = `C 언어 실력 평가 문제를 만들어주세요.
+const ASSESSMENT_PROMPT = `Create one C-language diagnostic assessment question.
 
-조건:
-- 카테고리: {category}
-- 난이도: {difficulty} (1=쉬움, 2=보통, 3=어려움)
-- 코드 출력 결과를 맞추는 문제
-- JSON 형식으로 응답
-
-응답 형식:
-{
-  "question": "다음 코드의 출력 결과는?",
-  "code": "int x = 5;\\nprintf(\\"%d\\", x);",
-  "answer": "5",
-  "hints": ["힌트1", "힌트2"]
-}`;
+Constraints:
+- Category: {category}
+- Difficulty: {difficulty} (1=easy, 2=medium, 3=hard)
+- Prefer output-tracing or runtime reasoning problems
+- Include answer and short hints
+- Return data that matches the output schema`;
 
 const CATEGORIES: AssessmentQuestion['category'][] = [
   'basics',
@@ -34,6 +27,9 @@ const CATEGORIES: AssessmentQuestion['category'][] = [
   'functions',
   'structs',
 ];
+
+const DEFAULT_QUESTION = 'What is the output of the following C code?';
+const DEFAULT_HINT = 'Check variable values and execution order step by step.';
 
 const ASSESSMENT_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -44,32 +40,71 @@ const ASSESSMENT_OUTPUT_SCHEMA: Record<string, unknown> = {
     hints: {
       type: 'array',
       items: { type: 'string' },
-      minItems: 1,
-      maxItems: 3,
     },
   },
   required: ['question', 'answer', 'hints'],
-  additionalProperties: false,
 };
 
-/**
- * Parses structured-output JSON text from Codex and normalizes its fields.
- *
- * @param {string} rawText - Raw `runTurn().text` value expected to be JSON.
- * @return {{ question: string; code?: string; answer: string; hints: string[] }} Parsed question payload.
- */
-function parseStructuredAssessmentQuestion(
-  rawText: string
-): { question: string; code?: string; answer: string; hints: string[] } {
-  const parsed = JSON.parse(rawText) as Record<string, unknown>;
+interface AssessmentPayload {
+  question: string;
+  code?: string;
+  answer: string;
+  hints: string[];
+}
 
+/**
+ * Converts unknown error values into readable text.
+ *
+ * @param {unknown} error - Error-like value.
+ * @return {string} Human-readable error message.
+ */
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Parses JSON object from raw model text.
+ *
+ * @param {string} rawText - Model text output.
+ * @return {Record<string, unknown>} Parsed JSON object.
+ */
+function parseJsonObject(rawText: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(rawText) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // fall through to block extraction
+  }
+
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('No JSON object found in model output.');
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Parsed JSON is not an object.');
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
+/**
+ * Normalizes parsed model JSON to assessment payload shape.
+ *
+ * @param {Record<string, unknown>} parsed - Parsed JSON object.
+ * @return {AssessmentPayload} Normalized assessment payload.
+ */
+function normalizeAssessmentPayload(parsed: Record<string, unknown>): AssessmentPayload {
   const question =
-    typeof parsed.question === 'string' && parsed.question.trim()
+    typeof parsed.question === 'string' && parsed.question.trim().length > 0
       ? parsed.question
-      : '?ㅼ쓬 肄붾뱶??異쒕젰 寃곌낵??';
+      : DEFAULT_QUESTION;
 
   const code =
-    typeof parsed.code === 'string' && parsed.code.trim()
+    typeof parsed.code === 'string' && parsed.code.trim().length > 0
       ? parsed.code
       : undefined;
 
@@ -83,8 +118,40 @@ function parseStructuredAssessmentQuestion(
     question,
     code,
     answer,
-    hints,
+    hints: hints.length > 0 ? hints : [DEFAULT_HINT],
   };
+}
+
+/**
+ * Generates one question with structured output enabled.
+ *
+ * @param {string} prompt - Prepared question-generation prompt.
+ * @return {Promise<AssessmentPayload>} Normalized generated question payload.
+ */
+async function generateQuestionStructured(prompt: string): Promise<AssessmentPayload> {
+  const client = getCodexClient();
+  const result = await client.runTurn({
+    prompt,
+    outputSchema: ASSESSMENT_OUTPUT_SCHEMA,
+  });
+
+  const parsed = parseJsonObject(result.text);
+  return normalizeAssessmentPayload(parsed);
+}
+
+/**
+ * Generates one question with text JSON fallback mode.
+ *
+ * @param {string} prompt - Prepared question-generation prompt.
+ * @return {Promise<AssessmentPayload>} Normalized generated question payload.
+ */
+async function generateQuestionFallback(prompt: string): Promise<AssessmentPayload> {
+  const client = getCodexClient();
+  const fallbackPrompt = `${prompt}\n\nReturn only one JSON object. Do not use markdown.`;
+  const result = await client.runTurn({ prompt: fallbackPrompt });
+
+  const parsed = parseJsonObject(result.text);
+  return normalizeAssessmentPayload(parsed);
 }
 
 /**
@@ -103,24 +170,35 @@ export async function generateQuestion(
     .replace('{difficulty}', String(difficulty));
 
   try {
-    const client = getCodexClient();
-    const result = await client.runTurn({
-      prompt,
-      outputSchema: ASSESSMENT_OUTPUT_SCHEMA,
-    });
-    const data = parseStructuredAssessmentQuestion(result.text);
+    const data = await generateQuestionStructured(prompt);
 
     return {
       id: `${category}-${Date.now()}`,
       category,
       difficulty,
-      question: data.question || '다음 코드의 출력 결과는?',
+      question: data.question,
       code: data.code,
-      answer: data.answer || '',
-      hints: data.hints || [],
+      answer: data.answer,
+      hints: data.hints,
     };
-  } catch {
-    throw new Error('문제 생성 실패: Codex 연결을 확인하세요');
+  } catch (structuredError) {
+    try {
+      const data = await generateQuestionFallback(prompt);
+
+      return {
+        id: `${category}-${Date.now()}`,
+        category,
+        difficulty,
+        question: data.question,
+        code: data.code,
+        answer: data.answer,
+        hints: data.hints,
+      };
+    } catch (fallbackError) {
+      throw new Error(
+        `���� ���� ����: structured=${toErrorMessage(structuredError)}; fallback=${toErrorMessage(fallbackError)}`
+      );
+    }
   }
 }
 
@@ -140,11 +218,11 @@ export async function getAssessmentQuestions(
 
   for (let i = 0; i < selectedCategories.length; i++) {
     const category = selectedCategories[i];
-    const difficulty = (Math.floor(i / 2) + 1) as 1 | 2 | 3;
+    const difficulty = Math.min(Math.floor(i / 2) + 1, 3) as 1 | 2 | 3;
 
     onProgress?.(i + 1, count);
 
-    const question = await generateQuestion(category, Math.min(difficulty, 3) as 1 | 2 | 3);
+    const question = await generateQuestion(category, difficulty);
     questions.push(question);
   }
 
@@ -190,20 +268,21 @@ export function calculateAssessmentResult(
     functions: 0,
   };
 
-  questions.forEach((q, i) => {
-    categoryCounts[q.category]++;
-    if (checkAnswer(q, answers[i] || '')) {
-      scores[q.category] += 100;
+  questions.forEach((question, index) => {
+    categoryCounts[question.category]++;
+    if (checkAnswer(question, answers[index] || '')) {
+      scores[question.category] += 100;
     }
   });
 
-  Object.keys(scores).forEach((cat) => {
-    if (categoryCounts[cat] > 0) {
-      scores[cat] = Math.round(scores[cat] / categoryCounts[cat]);
+  (Object.keys(scores) as Array<keyof typeof scores>).forEach((category) => {
+    if (categoryCounts[category] > 0) {
+      scores[category] = Math.round(scores[category] / categoryCounts[category]);
     }
   });
 
-  const totalScore = Object.values(scores).reduce((a, b) => a + b, 0) / Object.keys(scores).length;
+  const totalScore =
+    Object.values(scores).reduce((sum, score) => sum + score, 0) / Object.keys(scores).length;
 
   let skillLevel: SkillLevel;
   if (totalScore >= 70) {
@@ -216,14 +295,14 @@ export function calculateAssessmentResult(
 
   const weakAreas = Object.entries(scores)
     .filter(([, score]) => score < 60)
-    .map(([cat]) => cat);
+    .map(([category]) => category);
 
   const topicMap: Record<string, string> = {
-    basics: '기초 문법',
-    arrays: '배열',
-    pointers: '포인터',
-    structs: '구조체',
-    functions: '함수',
+    basics: 'basic syntax',
+    arrays: 'arrays',
+    pointers: 'pointers',
+    structs: 'structs',
+    functions: 'functions',
   };
 
   const recommendedTopics = weakAreas.map((area) => topicMap[area] || area);
