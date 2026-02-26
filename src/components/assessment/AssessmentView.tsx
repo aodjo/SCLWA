@@ -5,6 +5,7 @@ import Spinner from 'ink-spinner';
 import {
   generateQuestion,
   calculateAssessmentResult,
+  checkAnswer,
   type AssessmentQuestion,
 } from '../../services/assessment.js';
 import { saveAssessment } from '../../services/storage.js';
@@ -34,6 +35,11 @@ const CATEGORY_LABELS: Record<AssessmentQuestion['category'], string> = {
 
 const TOTAL_QUESTIONS = 5;
 type Phase = 'generating' | 'answering' | 'result';
+interface SubmissionFeedback {
+  isCorrect: boolean;
+  submittedAnswer: string;
+  expectedAnswer: string;
+}
 
 /**
  * Renders one syntax-highlighted code line with line number.
@@ -70,6 +76,7 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
   const [showHint, setShowHint] = useState(false);
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<SubmissionFeedback | null>(null);
 
   useEffect(() => {
     void generateNextQuestion(0);
@@ -92,6 +99,7 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
     try {
       const question = await generateQuestion(category, difficulty);
       setCurrentQuestion(question);
+      setFeedback(null);
       setPhase('answering');
     } catch (err) {
       setError(err instanceof Error ? err.message : '문제 생성에 실패했습니다.');
@@ -117,6 +125,14 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
     if (!currentQuestion) {
       return;
     }
+
+    const normalizedAnswer = value.trim();
+    const isCorrect = checkAnswer(currentQuestion, value);
+    setFeedback({
+      isCorrect,
+      submittedAnswer: normalizedAnswer,
+      expectedAnswer: currentQuestion.answer,
+    });
 
     const newQuestions = [...questions, currentQuestion];
     const newAnswers = [...answers, value];
@@ -147,6 +163,17 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
           </Box>
           <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
           <Box paddingX={2} paddingY={1}>
+            {feedback && (
+              <Box flexDirection="column" marginBottom={1}>
+                <Text color={feedback.isCorrect ? 'green' : 'red'}>
+                  {feedback.isCorrect ? '정답입니다.' : '오답입니다.'}
+                </Text>
+                <Text color="gray">내 답안: {feedback.submittedAnswer || '(입력 없음)'}</Text>
+                {!feedback.isCorrect && (
+                  <Text color="gray">정답: {feedback.expectedAnswer || '(출력 없음)'}</Text>
+                )}
+              </Box>
+            )}
             {error ? (
               <Box flexDirection="column">
                 <Text color="red">{error}</Text>
