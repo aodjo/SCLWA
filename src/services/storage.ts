@@ -10,8 +10,9 @@ const HISTORY_DIR = join(STORAGE_DIR, 'history');
 const CODE_DIR = join(STORAGE_DIR, 'code');
 
 /**
- * 스토리지 초기화
- * 필요한 디렉토리들을 생성
+ * Ensures all local storage directories exist.
+ *
+ * @return {Promise<void>} Resolves when storage directories are created.
  */
 export async function initStorage(): Promise<void> {
   await mkdir(STORAGE_DIR, { recursive: true });
@@ -20,8 +21,10 @@ export async function initStorage(): Promise<void> {
 }
 
 /**
- * 진행 상황 저장
- * @param progress - 저장할 진행 상황 객체
+ * Persists the full learner progress document.
+ *
+ * @param {Progress} progress - Progress payload to store on disk.
+ * @return {Promise<void>} Resolves when progress has been written.
  */
 export async function saveProgress(progress: Progress): Promise<void> {
   await initStorage();
@@ -29,8 +32,9 @@ export async function saveProgress(progress: Progress): Promise<void> {
 }
 
 /**
- * 진행 상황 불러오기
- * @returns 저장된 진행 상황 또는 초기값
+ * Loads learner progress from disk.
+ *
+ * @return {Promise<Progress>} Stored progress, or a default progress object when none exists.
  */
 export async function loadProgress(): Promise<Progress> {
   try {
@@ -42,7 +46,9 @@ export async function loadProgress(): Promise<Progress> {
 }
 
 /**
- * 기본 진행 상황 객체 반환
+ * Builds the default progress object used for first-time users.
+ *
+ * @return {Progress} Initial progress state.
  */
 function getDefaultProgress(): Progress {
   return {
@@ -54,16 +60,19 @@ function getDefaultProgress(): Progress {
 }
 
 /**
- * 세션 존재 여부 확인
- * @returns 이전 세션이 있는지 여부
+ * Checks whether a previous study session exists.
+ *
+ * @return {Promise<boolean>} `true` if persisted progress file is present.
  */
 export async function hasExistingSession(): Promise<boolean> {
   return existsSync(PROGRESS_FILE);
 }
 
 /**
- * 평가 결과 저장
- * @param result - 저장할 평가 결과
+ * Saves the latest assessment result into progress data.
+ *
+ * @param {AssessmentResult} result - Computed assessment result to persist.
+ * @return {Promise<void>} Resolves after assessment is saved.
  */
 export async function saveAssessment(result: AssessmentResult): Promise<void> {
   const progress = await loadProgress();
@@ -72,14 +81,13 @@ export async function saveAssessment(result: AssessmentResult): Promise<void> {
 }
 
 /**
- * 채팅 히스토리 저장
- * @param messages - 저장할 메시지 목록
- * @param date - 날짜 (선택, 기본값: 오늘)
+ * Saves chat history for a specific day.
+ *
+ * @param {ChatMessage[]} messages - Messages to write.
+ * @param {string} [date] - Date key in `YYYY-MM-DD`; defaults to today.
+ * @return {Promise<void>} Resolves after chat history file is written.
  */
-export async function saveChatHistory(
-  messages: ChatMessage[],
-  date?: string
-): Promise<void> {
+export async function saveChatHistory(messages: ChatMessage[], date?: string): Promise<void> {
   await initStorage();
   const dateStr = date || new Date().toISOString().split('T')[0];
   const filePath = join(HISTORY_DIR, `${dateStr}.json`);
@@ -87,9 +95,10 @@ export async function saveChatHistory(
 }
 
 /**
- * 채팅 히스토리 불러오기
- * @param date - 날짜 (선택, 기본값: 오늘)
- * @returns 저장된 메시지 목록 또는 빈 배열
+ * Loads chat history for a specific day.
+ *
+ * @param {string} [date] - Date key in `YYYY-MM-DD`; defaults to today.
+ * @return {Promise<ChatMessage[]>} Stored messages, or an empty array when missing.
  */
 export async function loadChatHistory(date?: string): Promise<ChatMessage[]> {
   const dateStr = date || new Date().toISOString().split('T')[0];
@@ -104,9 +113,11 @@ export async function loadChatHistory(date?: string): Promise<ChatMessage[]> {
 }
 
 /**
- * 코드 저장
- * @param code - 저장할 코드
- * @param filename - 파일명
+ * Writes source code snapshot into the local code workspace.
+ *
+ * @param {string} code - Raw source code content.
+ * @param {string} filename - Target filename.
+ * @return {Promise<void>} Resolves after file write succeeds.
  */
 export async function saveCode(code: string, filename: string): Promise<void> {
   await initStorage();
@@ -115,9 +126,10 @@ export async function saveCode(code: string, filename: string): Promise<void> {
 }
 
 /**
- * 코드 불러오기
- * @param filename - 파일명
- * @returns 저장된 코드 또는 null
+ * Loads a previously saved source file.
+ *
+ * @param {string} filename - Filename under the local code workspace.
+ * @return {Promise<string | null>} File content or `null` when file does not exist.
  */
 export async function loadCode(filename: string): Promise<string | null> {
   const filePath = join(CODE_DIR, filename);
@@ -130,8 +142,10 @@ export async function loadCode(filename: string): Promise<string | null> {
 }
 
 /**
- * 퍼즐 완료 기록
- * @param puzzleId - 완료한 퍼즐 ID
+ * Marks a puzzle as completed if it has not been recorded yet.
+ *
+ * @param {string} puzzleId - Unique puzzle identifier.
+ * @return {Promise<void>} Resolves once progress update is persisted.
  */
 export async function markPuzzleCompleted(puzzleId: string): Promise<void> {
   const progress = await loadProgress();
@@ -142,8 +156,10 @@ export async function markPuzzleCompleted(puzzleId: string): Promise<void> {
 }
 
 /**
- * 학습 시간 업데이트
- * @param seconds - 추가할 학습 시간 (초)
+ * Adds study time to cumulative progress and updates last session timestamp.
+ *
+ * @param {number} seconds - Number of seconds to add.
+ * @return {Promise<void>} Resolves after progress is saved.
  */
 export async function updateStudyTime(seconds: number): Promise<void> {
   const progress = await loadProgress();
@@ -153,13 +169,15 @@ export async function updateStudyTime(seconds: number): Promise<void> {
 }
 
 /**
- * 모든 진행 데이터 삭제
+ * Deletes all persisted tutor data from local storage.
+ *
+ * @return {Promise<void>} Resolves after best-effort cleanup completes.
  */
 export async function clearAllData(): Promise<void> {
   const { rm } = await import('fs/promises');
   try {
     await rm(STORAGE_DIR, { recursive: true, force: true });
   } catch {
-    // ignore errors
+    // Ignore cleanup errors because this is a best-effort operation.
   }
 }

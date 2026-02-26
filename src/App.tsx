@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, useApp, useInput, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import type { AppMode, AssessmentResult, SkillLevel } from './types/index.js';
@@ -12,23 +12,33 @@ import { getCodexClient } from './services/codex-client.js';
 type AppState = 'loading' | 'connecting' | 'assessment' | 'main';
 
 /**
- * 메인 애플리케이션 컴포넌트
+ * Root Ink application component that manages startup, Codex connectivity,
+ * onboarding assessment flow, and main mode switching.
+ *
+ * @return {JSX.Element} Rendered root application UI.
  */
 export function App() {
   const { exit } = useApp();
   const [appState, setAppState] = useState<AppState>('loading');
   const [mode, setMode] = useState<AppMode>('tutoring');
-  const [code, setCode] = useState<string>('#include <stdio.h>\n\nint main() {\n    printf("Hello, C!");\n    return 0;\n}');
-  const [output, setOutput] = useState<string>('');
-  const [isCompiling, setIsCompiling] = useState(false);
+  const [code, setCode] = useState<string>(
+    '#include <stdio.h>\n\nint main() {\n    printf("Hello, C!");\n    return 0;\n}'
+  );
+  const [output] = useState<string>('');
+  const [isCompiling] = useState(false);
   const [skillLevel, setSkillLevel] = useState<SkillLevel>('beginner');
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   useEffect(() => {
-    checkSession();
+    void checkSession();
   }, []);
 
-  const checkSession = async () => {
+  /**
+   * Loads existing persisted session data and decides initial app state.
+   *
+   * @return {Promise<void>} Resolves after startup state is determined.
+   */
+  const checkSession = async (): Promise<void> => {
     const hasSession = await hasExistingSession();
     if (hasSession) {
       const progress = await loadProgress();
@@ -42,13 +52,18 @@ export function App() {
     await connectToCodex();
   };
 
-  const connectToCodex = async () => {
+  /**
+   * Starts Codex RPC client and transitions to assessment on success.
+   *
+   * @return {Promise<void>} Resolves after connection attempt completes.
+   */
+  const connectToCodex = async (): Promise<void> => {
     try {
       const client = getCodexClient();
       await client.start();
       setAppState('assessment');
     } catch (err) {
-      setConnectionError(err instanceof Error ? err.message : 'Codex 연결 실패');
+      setConnectionError(err instanceof Error ? err.message : 'Failed to connect Codex');
     }
   };
 
@@ -60,7 +75,7 @@ export function App() {
     if (appState === 'connecting' && connectionError) {
       if (input === 'r') {
         setConnectionError(null);
-        connectToCodex();
+        void connectToCodex();
       }
       if (input === 's') {
         setAppState('main');
@@ -75,7 +90,13 @@ export function App() {
     }
   });
 
-  const handleAssessmentComplete = (result: AssessmentResult) => {
+  /**
+   * Applies assessment result to app state and enters main interface.
+   *
+   * @param {AssessmentResult} result - Final assessment payload.
+   * @return {void} Updates component state.
+   */
+  const handleAssessmentComplete = (result: AssessmentResult): void => {
     setSkillLevel(result.skillLevel);
     setAppState('main');
   };
@@ -86,7 +107,7 @@ export function App() {
         <Text bold color="cyan">C Tutor</Text>
         <Box marginTop={1}>
           <Text color="cyan"><Spinner type="dots" /></Text>
-          <Text> 시작 중...</Text>
+          <Text> Starting...</Text>
         </Box>
       </Box>
     );
@@ -104,13 +125,13 @@ export function App() {
                 <Text color="gray">npm install -g @openai/codex</Text>
               </Box>
               <Box marginTop={1}>
-                <Text color="gray">R: 다시 | S: Codex 없이 시작</Text>
+                <Text color="gray">R: retry | S: start without Codex</Text>
               </Box>
             </>
           ) : (
             <Box>
               <Text color="cyan"><Spinner type="dots" /></Text>
-              <Text> Codex 연결 중...</Text>
+              <Text> Connecting to Codex...</Text>
             </Box>
           )}
         </Box>
@@ -119,20 +140,13 @@ export function App() {
   }
 
   if (appState === 'assessment') {
-    return (
-      <AssessmentView onComplete={handleAssessmentComplete} />
-    );
+    return <AssessmentView onComplete={handleAssessmentComplete} />;
   }
 
   return (
     <Box flexDirection="column" width="100%" height="100%">
       <TabBar currentMode={mode} onModeChange={setMode} />
-      <Layout
-        mode={mode}
-        code={code}
-        onCodeChange={setCode}
-        skillLevel={skillLevel}
-      />
+      <Layout mode={mode} code={code} onCodeChange={setCode} skillLevel={skillLevel} />
       <StatusBar output={output} isCompiling={isCompiling} />
     </Box>
   );

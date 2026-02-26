@@ -7,13 +7,18 @@ interface StatusBarProps {
 }
 
 /**
- * 하단 상태바
+ * Displays compile activity and latest output/error summary.
+ *
+ * @param {StatusBarProps} props - Component props.
+ * @param {string} props.output - Latest output text.
+ * @param {boolean} props.isCompiling - Whether compile/run is in progress.
+ * @return {JSX.Element} Status bar UI.
  */
 export function StatusBar({ output, isCompiling }: StatusBarProps) {
   return (
     <Box borderStyle="round" borderColor="gray" paddingX={1} height={3}>
       {isCompiling ? (
-        <Text color="yellow">컴파일 중...</Text>
+        <Text color="yellow">Compiling...</Text>
       ) : output ? (
         <Box gap={1}>
           <Text color={output.includes('Error') ? 'red' : 'green'}>
@@ -22,7 +27,7 @@ export function StatusBar({ output, isCompiling }: StatusBarProps) {
           <Text>{output}</Text>
         </Box>
       ) : (
-        <Text color="gray">F5: 컴파일 실행</Text>
+        <Text color="gray">F5: compile and run</Text>
       )}
     </Box>
   );

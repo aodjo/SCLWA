@@ -5,7 +5,9 @@ import { CodexRpcClient, resolveCodexBinary } from '../codex/codex_rpc.js';
 let clientInstance: CodexRpcClient | null = null;
 
 /**
- * Codex 클라이언트 싱글톤 인스턴스 가져오기
+ * Returns a singleton `CodexRpcClient` configured for local RPC transport.
+ *
+ * @return {CodexRpcClient} Shared client instance used by all Codex features.
  */
 export function getCodexClient(): CodexRpcClient {
   if (!clientInstance) {

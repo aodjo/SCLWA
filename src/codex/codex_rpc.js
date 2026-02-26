@@ -5,6 +5,13 @@ import path from "node:path";
 import WebSocket from "ws";
 
 export class RpcError extends Error {
+  /**
+   * Creates an RPC protocol error wrapper.
+   *
+   * @param {number} code - JSON-RPC error code.
+   * @param {string} message - Human-readable error message.
+   * @param {unknown} [data=null] - Optional additional error payload.
+   */
   constructor(code, message, data = null) {
     super(`${message} (code=${code})`);
     this.name = "RpcError";
@@ -15,6 +22,11 @@ export class RpcError extends Error {
 }
 
 export class TimeoutRpcError extends Error {
+  /**
+   * Creates timeout-specific error for RPC and notification waits.
+   *
+   * @param {string} message - Timeout error message.
+   */
   constructor(message) {
     super(message);
     this.name = "TimeoutRpcError";
@@ -22,11 +34,22 @@ export class TimeoutRpcError extends Error {
 }
 
 class AsyncQueue {
+  /**
+   * Initializes async queue state.
+   *
+   * @return {void} Creates empty item and waiter queues.
+   */
   constructor() {
     this.items = [];
     this.waiters = [];
   }
 
+  /**
+   * Pushes an item to queue or resolves pending waiter immediately.
+   *
+   * @param {unknown} item - Item to publish.
+   * @return {void} Updates queue state.
+   */
   push(item) {
     if (this.waiters.length > 0) {
       const waiter = this.waiters.shift();
@@ -39,6 +62,12 @@ class AsyncQueue {
     this.items.push(item);
   }
 
+  /**
+   * Awaits next queued item with optional timeout.
+   *
+   * @param {number} timeoutMs - Timeout in milliseconds.
+   * @return {Promise<unknown>} Resolves with next item or rejects on timeout.
+   */
   next(timeoutMs) {
     if (this.items.length > 0) {
       return Promise.resolve(this.items.shift());
@@ -58,6 +87,12 @@ class AsyncQueue {
     });
   }
 
+  /**
+   * Rejects all pending waiters and closes queue.
+   *
+   * @param {unknown} error - Error used to reject waiters.
+   * @return {void} Clears waiter queue.
+   */
   close(error) {
     while (this.waiters.length > 0) {
       const waiter = this.waiters.shift();
@@ -69,6 +104,12 @@ class AsyncQueue {
   }
 }
 
+/**
+ * Resolves executable path using platform shell lookup (`which`/`where`).
+ *
+ * @param {string} name - Command name to resolve.
+ * @return {string | null} Absolute executable path or `null` when not found.
+ */
 function resolveShellCommand(name) {
   const cmd = process.platform === "win32" ? "where" : "which";
   const args = [name];
@@ -83,6 +124,11 @@ function resolveShellCommand(name) {
   return line || null;
 }
 
+/**
+ * Resolves path to Codex CLI binary from env, npm install path, or PATH lookup.
+ *
+ * @return {string} Absolute Codex executable path.
+ */
 export function resolveCodexBinary() {
   const envBin = process.env.CODEX_BIN;
   if (envBin) {
@@ -123,6 +169,11 @@ export function resolveCodexBinary() {
 }
 
 export class CodexRpcClient {
+  /**
+   * Creates a Codex RPC client bound to app-server websocket.
+   *
+   * @param {{wsUrl: string; codexBin: string; spawnServer?: boolean; startupTimeoutSeconds?: number}} options - Client options.
+   */
   constructor({
     wsUrl,
     codexBin,
@@ -144,6 +195,11 @@ export class CodexRpcClient {
     this.started = false;
   }
 
+  /**
+   * Starts optional local app-server process and initializes RPC session.
+   *
+   * @return {Promise<void>} Resolves when client is ready.
+   */
   async start() {
     if (this.started) {
       return;
@@ -164,6 +220,11 @@ export class CodexRpcClient {
     this.started = true;
   }
 
+  /**
+   * Stops websocket/process resources and rejects pending operations.
+   *
+   * @return {Promise<void>} Resolves when shutdown completes.
+   */
   async stop() {
     this.started = false;
 
@@ -194,6 +255,12 @@ export class CodexRpcClient {
     this.process = null;
   }
 
+  /**
+   * Repeatedly attempts websocket connection until timeout.
+   *
+   * @param {number} timeoutSeconds - Maximum retry window in seconds.
+   * @return {Promise<void>} Resolves once websocket connects.
+   */
   async connectWithRetry(timeoutSeconds) {
     const deadline = Date.now() + timeoutSeconds * 1000;
     let lastError = null;
@@ -209,6 +276,11 @@ export class CodexRpcClient {
     throw new Error(`Could not connect to Codex app-server at ${this.wsUrl}: ${String(lastError)}`);
   }
 
+  /**
+   * Performs a single websocket connection attempt.
+   *
+   * @return {Promise<void>} Resolves when websocket opens.
+   */
   connectOnce() {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(this.wsUrl, {
@@ -222,12 +294,23 @@ export class CodexRpcClient {
         ws.removeListener("error", onError);
       };
 
+      /**
+       * Handles successful websocket open event.
+       *
+       * @return {void} Finalizes connection setup.
+       */
       const onOpen = () => {
         cleanup();
         this.ws = ws;
         this.installWsHandlers(ws);
         resolve();
       };
+      /**
+       * Handles websocket connection error during initial handshake.
+       *
+       * @param {unknown} error - Connection error object.
+       * @return {void} Rejects pending connect promise.
+       */
       const onError = (error) => {
         cleanup();
         reject(error);
@@ -238,6 +321,12 @@ export class CodexRpcClient {
     });
   }
 
+  /**
+   * Attaches websocket handlers for message dispatch and failure propagation.
+   *
+   * @param {WebSocket} ws - Connected websocket instance.
+   * @return {void} Registers listeners.
+   */
   installWsHandlers(ws) {
     ws.on("message", async (raw) => {
       try {
@@ -258,6 +347,12 @@ export class CodexRpcClient {
     });
   }
 
+  /**
+   * Rejects all pending request promises with the same error.
+   *
+   * @param {unknown} error - Error to propagate.
+   * @return {void} Clears pending request map.
+   */
   failPending(error) {
     for (const [id, state] of [...this.pending.entries()]) {
       state.reject(error);
@@ -265,6 +360,12 @@ export class CodexRpcClient {
     }
   }
 
+  /**
+   * Sends one JSON-RPC payload over active websocket.
+   *
+   * @param {Record<string, unknown>} payload - JSON-RPC message payload.
+   * @return {Promise<void>} Resolves when send callback succeeds.
+   */
   async send(payload) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error("Codex RPC websocket is not connected.");
@@ -280,6 +381,14 @@ export class CodexRpcClient {
     });
   }
 
+  /**
+   * Sends JSON-RPC request and resolves with typed object result.
+   *
+   * @param {string} method - RPC method name.
+   * @param {unknown} params - RPC params payload.
+   * @param {number} [timeoutSeconds=120] - Response timeout in seconds.
+   * @return {Promise<Record<string, unknown>>} RPC result object.
+   */
   async request(method, params, timeoutSeconds = 120) {
     const lock = this.requestLock;
     let unlock = null;
@@ -326,10 +435,21 @@ export class CodexRpcClient {
     return result;
   }
 
+  /**
+   * Starts browser/device login flow for ChatGPT account auth.
+   *
+   * @return {Promise<Record<string, unknown>>} Login start payload.
+   */
   async startChatgptLogin() {
     return this.request("account/login/start", { type: "chatgpt" }, 60);
   }
 
+  /**
+   * Authenticates using externally supplied ChatGPT auth tokens.
+   *
+   * @param {{accessToken: string; chatgptAccountId: string; chatgptPlanType?: string}} params - Token payload.
+   * @return {Promise<Record<string, unknown>>} Login RPC response.
+   */
   async loginWithChatgptAuthTokens({ accessToken, chatgptAccountId, chatgptPlanType }) {
     const params = {
       type: "chatgptAuthTokens",
@@ -342,18 +462,42 @@ export class CodexRpcClient {
     return this.request("account/login/start", params, 60);
   }
 
+  /**
+   * Cancels in-flight login attempt.
+   *
+   * @param {string} loginId - Login request id.
+   * @return {Promise<Record<string, unknown>>} Cancel RPC response.
+   */
   async cancelLogin(loginId) {
     return this.request("account/login/cancel", { loginId }, 30);
   }
 
+  /**
+   * Reads current account state from Codex backend.
+   *
+   * @param {boolean} [refreshToken=false] - Whether token refresh should be attempted.
+   * @return {Promise<Record<string, unknown>>} Account payload.
+   */
   async getAccount(refreshToken = false) {
     return this.request("account/read", { refreshToken }, 30);
   }
 
+  /**
+   * Reads account rate limit status.
+   *
+   * @return {Promise<Record<string, unknown>>} Rate limits payload.
+   */
   async getRateLimits() {
     return this.request("account/rateLimits/read", {}, 30);
   }
 
+  /**
+   * Lists available models from Codex backend.
+   *
+   * @param {number} limit - Page size limit.
+   * @param {string | null} cursor - Optional pagination cursor.
+   * @return {Promise<Record<string, unknown>>} Model list response.
+   */
   async listModels(limit, cursor) {
     const params = {};
     if (Number.isFinite(limit)) {
@@ -365,12 +509,24 @@ export class CodexRpcClient {
     return this.request("model/list", params, 30);
   }
 
+  /**
+   * Creates notification subscription backed by AsyncQueue.
+   *
+   * @param {(message: Record<string, unknown>) => boolean} predicate - Notification filter predicate.
+   * @return {string} Subscription token.
+   */
   subscribe(predicate) {
     const token = Math.random().toString(16).slice(2);
     this.subscribers.set(token, { predicate, queue: new AsyncQueue() });
     return token;
   }
 
+  /**
+   * Removes active notification subscription.
+   *
+   * @param {string} token - Subscription token returned by `subscribe`.
+   * @return {void} Closes and removes subscription.
+   */
   unsubscribe(token) {
     const found = this.subscribers.get(token);
     if (found) {
@@ -379,6 +535,12 @@ export class CodexRpcClient {
     this.subscribers.delete(token);
   }
 
+  /**
+   * Dispatches one notification to matching subscribers.
+   *
+   * @param {Record<string, unknown>} message - Notification message.
+   * @return {void} Enqueues notification for matching subscribers.
+   */
   publishNotification(message) {
     for (const [, sub] of [...this.subscribers.entries()]) {
       try {
@@ -391,6 +553,13 @@ export class CodexRpcClient {
     }
   }
 
+  /**
+   * Waits for one matching notification with timeout.
+   *
+   * @param {(message: Record<string, unknown>) => boolean} predicate - Notification filter.
+   * @param {number} timeoutSeconds - Wait timeout in seconds.
+   * @return {Promise<Record<string, unknown>>} Matching notification.
+   */
   async waitForNotification(predicate, timeoutSeconds) {
     const token = this.subscribe(predicate);
     const sub = this.subscribers.get(token);
@@ -404,6 +573,13 @@ export class CodexRpcClient {
     }
   }
 
+  /**
+   * Waits for `account/login/completed` notification.
+   *
+   * @param {string | null | undefined} loginId - Optional specific login id.
+   * @param {number} timeoutSeconds - Wait timeout in seconds.
+   * @return {Promise<Record<string, unknown>>} Completion payload.
+   */
   async waitForLoginCompletion(loginId, timeoutSeconds) {
     const message = await this.waitForNotification((notification) => {
       if (notification.method !== "account/login/completed") {
@@ -418,6 +594,21 @@ export class CodexRpcClient {
     return isObject(message.params) ? message.params : {};
   }
 
+  /**
+   * Executes one assistant turn and aggregates streamed/fallback output.
+   *
+   * @param {Object} options - Turn execution options.
+   * @param {string | null} [options.prompt=null] - Fallback text prompt.
+   * @param {Array<Record<string, unknown>> | null} [options.inputItems=null] - Structured input items.
+   * @param {string | null} [options.model=null] - Optional model override.
+   * @param {string} [options.sandbox='read-only'] - Sandbox mode.
+   * @param {string} [options.approvalPolicy='never'] - Approval policy mode.
+   * @param {number} [options.timeoutSeconds=180] - Turn timeout in seconds.
+   * @param {string | null} [options.cwd=null] - Optional working directory.
+   * @param {Record<string, unknown> | null} [options.outputSchema=null] - Optional output schema.
+   * @param {((params: unknown) => unknown) | null} [options.toolCallHandler=null] - Optional dynamic tool handler.
+   * @return {Promise<Record<string, unknown>>} Aggregated turn result.
+   */
   async runTurn({
     prompt = null,
     inputItems = null,
@@ -558,6 +749,12 @@ export class CodexRpcClient {
     }
   }
 
+  /**
+   * Decodes websocket message payload into array of object messages.
+   *
+   * @param {Buffer | string} raw - Raw websocket message.
+   * @return {Array<Record<string, unknown>>} Decoded object messages.
+   */
   decodeMessages(raw) {
     const text = Buffer.isBuffer(raw) ? raw.toString("utf8") : String(raw);
     const parsed = JSON.parse(text);
@@ -570,6 +767,12 @@ export class CodexRpcClient {
     return [];
   }
 
+  /**
+   * Routes one decoded message to response resolver or notification flow.
+   *
+   * @param {Record<string, unknown>} message - Decoded JSON-RPC message.
+   * @return {Promise<void>} Resolves after message handling.
+   */
   async dispatchMessage(message) {
     if ("id" in message && ("result" in message || "error" in message)) {
       const requestId = message.id;
@@ -605,6 +808,12 @@ export class CodexRpcClient {
     }
   }
 
+  /**
+   * Handles server-initiated RPC requests (tool calls and auth refresh hooks).
+   *
+   * @param {Record<string, unknown>} message - Incoming server request message.
+   * @return {Promise<void>} Resolves after response is sent.
+   */
   async handleServerRequest(message) {
     const requestId = message.id;
     if (!requestId || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -669,6 +878,12 @@ export class CodexRpcClient {
     });
   }
 
+  /**
+   * Normalizes dynamic tool handler return value to RPC expected payload shape.
+   *
+   * @param {unknown} result - Tool handler return value.
+   * @return {{success: boolean; contentItems: Array<Record<string, unknown>>}} Normalized tool response.
+   */
   normalizeDynamicToolResponse(result) {
     if (isObject(result)) {
       if (Array.isArray(result.contentItems) && "success" in result) {
@@ -690,6 +905,13 @@ export class CodexRpcClient {
     };
   }
 
+  /**
+   * Checks whether a notification belongs to a specific thread turn flow.
+   *
+   * @param {Record<string, unknown>} message - Notification object.
+   * @param {string} threadId - Active thread id.
+   * @return {boolean} `true` when notification should be consumed by turn waiter.
+   */
   isTurnRelatedNotification(message, threadId) {
     const method = message.method;
     const params = isObject(message.params) ? message.params : {};
@@ -705,6 +927,12 @@ export class CodexRpcClient {
     return false;
   }
 
+  /**
+   * Extracts output text chunks from raw message item payload.
+   *
+   * @param {unknown} item - Raw response item.
+   * @return {string[]} Extracted text chunks.
+   */
   extractTextFromRawItem(item) {
     if (!isObject(item) || item.type !== "message" || !Array.isArray(item.content)) {
       return [];
@@ -719,6 +947,12 @@ export class CodexRpcClient {
   }
 }
 
+/**
+ * Checks whether a value is a plain object.
+ *
+ * @param {unknown} value - Value to inspect.
+ * @return {boolean} `true` for non-null non-array objects.
+ */
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }

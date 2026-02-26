@@ -10,7 +10,9 @@ const TIMEOUT_SECONDS = 5;
 const DOCKER_IMAGE = 'c-tutor-runner';
 
 /**
- * Docker 이미지가 존재하는지 확인
+ * Checks whether the required Docker image already exists locally.
+ *
+ * @return {Promise<boolean>} `true` when the image is available.
  */
 async function checkDockerImage(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -22,7 +24,9 @@ async function checkDockerImage(): Promise<boolean> {
 }
 
 /**
- * Docker 이미지 빌드
+ * Builds the local Docker image used to compile and run C code safely.
+ *
+ * @return {Promise<void>} Resolves on successful image build.
  */
 async function buildDockerImage(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -31,31 +35,34 @@ async function buildDockerImage(): Promise<void> {
       stdio: 'inherit',
     });
     proc.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`Docker build failed with code ${code}`));
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Docker build failed with code ${code}`));
+      }
     });
   });
 }
 
 /**
- * C 코드를 Docker 컨테이너에서 컴파일하고 실행
+ * Compiles and runs C code inside an isolated Docker container.
+ *
+ * @param {string} code - C source code to compile and execute.
+ * @return {Promise<CompileResult>} Execution result including output or error details.
  */
 export async function runCCode(code: string): Promise<CompileResult> {
-  // temp 디렉토리 생성
   await mkdir(TEMP_DIR, { recursive: true });
 
-  // 코드를 파일로 저장
   const sourceFile = join(TEMP_DIR, 'main.c');
   const outputFile = join(TEMP_DIR, 'main');
 
   await writeFile(sourceFile, code, 'utf-8');
 
-  // Docker 이미지 확인/빌드
   const imageExists = await checkDockerImage();
   if (!imageExists) {
     try {
       await buildDockerImage();
-    } catch (err) {
+    } catch {
       return {
         success: false,
         error: 'Failed to build Docker image. Is Docker running?',
@@ -64,22 +71,31 @@ export async function runCCode(code: string): Promise<CompileResult> {
     }
   }
 
-  // Docker에서 컴파일 및 실행
   return new Promise((resolve) => {
     const command = `gcc /code/main.c -o /code/main && timeout ${TIMEOUT_SECONDS}s /code/main`;
 
-    const proc = spawn('docker', [
-      'run',
-      '--rm',
-      '-v', `${TEMP_DIR}:/code`,
-      '--network', 'none',
-      '--memory', '128m',
-      '--cpus', '0.5',
-      DOCKER_IMAGE,
-      'sh', '-c', command,
-    ], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    const proc = spawn(
+      'docker',
+      [
+        'run',
+        '--rm',
+        '-v',
+        `${TEMP_DIR}:/code`,
+        '--network',
+        'none',
+        '--memory',
+        '128m',
+        '--cpus',
+        '0.5',
+        DOCKER_IMAGE,
+        'sh',
+        '-c',
+        command,
+      ],
+      {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }
+    );
 
     let stdout = '';
     let stderr = '';
@@ -92,33 +108,31 @@ export async function runCCode(code: string): Promise<CompileResult> {
       stderr += data.toString();
     });
 
-    proc.on('close', async (code) => {
-      // 임시 파일 정리
+    proc.on('close', async (codeValue) => {
       try {
         await rm(sourceFile, { force: true });
         await rm(outputFile, { force: true });
       } catch {
-        // ignore cleanup errors
+        // Ignore cleanup errors.
       }
 
-      if (code === 0) {
+      if (codeValue === 0) {
         resolve({
           success: true,
           output: stdout.trim() || '(no output)',
-          exitCode: code,
+          exitCode: codeValue,
         });
-      } else if (code === 124) {
-        // timeout exit code
+      } else if (codeValue === 124) {
         resolve({
           success: false,
           error: 'Timeout: Code execution exceeded time limit (infinite loop?)',
-          exitCode: code,
+          exitCode: codeValue,
         });
       } else {
         resolve({
           success: false,
-          error: stderr.trim() || `Compilation/execution failed (exit code: ${code})`,
-          exitCode: code ?? -1,
+          error: stderr.trim() || `Compilation/execution failed (exit code: ${codeValue})`,
+          exitCode: codeValue ?? -1,
         });
       }
     });
@@ -134,7 +148,10 @@ export async function runCCode(code: string): Promise<CompileResult> {
 }
 
 /**
- * Docker 없이 로컬 gcc로 실행 (폴백)
+ * Compiles and runs C code locally via `gcc` as a fallback when Docker is unavailable.
+ *
+ * @param {string} code - C source code to compile and execute.
+ * @return {Promise<CompileResult>} Execution result including output or error details.
  */
 export async function runCCodeLocal(code: string): Promise<CompileResult> {
   await mkdir(TEMP_DIR, { recursive: true });
@@ -145,7 +162,6 @@ export async function runCCodeLocal(code: string): Promise<CompileResult> {
   await writeFile(sourceFile, code, 'utf-8');
 
   return new Promise((resolve) => {
-    // 컴파일
     const compile = spawn('gcc', [sourceFile, '-o', outputFile], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -165,7 +181,6 @@ export async function runCCodeLocal(code: string): Promise<CompileResult> {
         return;
       }
 
-      // 실행
       const run = spawn(outputFile, [], {
         stdio: ['pipe', 'pipe', 'pipe'],
         timeout: TIMEOUT_SECONDS * 1000,
@@ -183,12 +198,11 @@ export async function runCCodeLocal(code: string): Promise<CompileResult> {
       });
 
       run.on('close', async (runCode) => {
-        // 정리
         try {
           await rm(sourceFile, { force: true });
           await rm(outputFile, { force: true });
         } catch {
-          // ignore
+          // Ignore cleanup errors.
         }
 
         if (runCode === 0) {

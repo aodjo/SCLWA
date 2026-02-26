@@ -8,10 +8,22 @@ dotenv.config();
 const app = express();
 app.use(express.json({ limit: "30mb" }));
 
+/**
+ * Checks whether a value is a plain object (non-null and not an array).
+ *
+ * @param {unknown} value - Value to inspect.
+ * @return {boolean} `true` when value is a plain object.
+ */
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/**
+ * Maps internal errors to HTTP status/detail payload.
+ *
+ * @param {unknown} error - Error thrown by bridge operations.
+ * @return {{ status: number; detail: string }} HTTP error payload.
+ */
 function toHttpError(error) {
   if (error instanceof TimeoutRpcError) {
     return { status: 504, detail: error.message };
@@ -30,11 +42,24 @@ function toHttpError(error) {
   return { status: 500, detail: error instanceof Error ? error.message : String(error) };
 }
 
+/**
+ * Writes normalized error payload to an express response.
+ *
+ * @param {import("express").Response} res - Express response object.
+ * @param {unknown} error - Error to serialize.
+ * @return {void} Sends HTTP response.
+ */
 function sendError(res, error) {
   const mapped = toHttpError(error);
   res.status(mapped.status).json({ detail: mapped.detail });
 }
 
+/**
+ * Extracts image URL string from supported image field shapes.
+ *
+ * @param {unknown} imageField - Possible image field payload.
+ * @return {string | null} Normalized URL or `null` when unavailable.
+ */
 function normalizeImageUrl(imageField) {
   if (typeof imageField === "string" && imageField) {
     return imageField;
@@ -45,6 +70,12 @@ function normalizeImageUrl(imageField) {
   return null;
 }
 
+/**
+ * Flattens multimodal message content into plain text for prompt composition.
+ *
+ * @param {unknown} content - Message content from chat payload.
+ * @return {string} Text representation of the content.
+ */
 function extractMessageText(content) {
   if (content === null || content === undefined) {
     return "";
@@ -92,6 +123,12 @@ function extractMessageText(content) {
   return chunks.join("\n");
 }
 
+/**
+ * Converts chat content payload into bridge input item array.
+ *
+ * @param {unknown} content - Message content value.
+ * @return {Array<Record<string, unknown>>} Normalized input items.
+ */
 function extractInputItemsFromContent(content) {
   if (content === null || content === undefined) {
     return [];
@@ -148,6 +185,12 @@ function extractInputItemsFromContent(content) {
   return items;
 }
 
+/**
+ * Converts attachment metadata into bridge input item array.
+ *
+ * @param {unknown} attachments - Attachments payload from request body.
+ * @return {Array<Record<string, unknown>>} Normalized attachment items.
+ */
 function extractInputItemsFromAttachments(attachments) {
   if (!Array.isArray(attachments) || attachments.length === 0) {
     return [];
@@ -174,6 +217,13 @@ function extractInputItemsFromAttachments(attachments) {
   return items;
 }
 
+/**
+ * Builds turn input payload by combining history, latest user message, and attachments.
+ *
+ * @param {Array<Record<string, unknown>>} messages - Chat message history.
+ * @param {unknown} attachments - Optional attachment array.
+ * @return {Array<Record<string, unknown>>} Input items for `runTurn`.
+ */
 function buildTurnInput(messages, attachments) {
   if (!Array.isArray(messages) || messages.length === 0) {
     return [];
@@ -232,6 +282,12 @@ function buildTurnInput(messages, attachments) {
   return turnInput;
 }
 
+/**
+ * Builds plain text prompt from role-based message history.
+ *
+ * @param {Array<Record<string, unknown>>} messages - Chat messages.
+ * @return {string} Prompt text.
+ */
 function buildPrompt(messages) {
   if (messages.length === 1 && messages[0]?.role === "user") {
     return extractMessageText(messages[0]?.content).trim();
@@ -248,6 +304,13 @@ function buildPrompt(messages) {
   return lines.join("\n\n").trim();
 }
 
+/**
+ * Normalizes OpenAI-style function tool declarations.
+ *
+ * @param {unknown} tools - `tools` request field.
+ * @param {unknown} functions - Legacy `functions` request field.
+ * @return {Array<{name: string; description: string; parameters: Record<string, unknown>}>} Deduplicated tools.
+ */
 function normalizeFunctionTools(tools, functions) {
   const normalized = [];
 
@@ -306,6 +369,13 @@ function normalizeFunctionTools(tools, functions) {
   return [...deduped.values()];
 }
 
+/**
+ * Validates and normalizes tool choice directive.
+ *
+ * @param {unknown} choice - `tool_choice` value from request.
+ * @param {Set<string>} toolNames - Set of available tool names.
+ * @return {{ mode: string; forced_name: string | null }} Normalized tool choice config.
+ */
 function normalizeToolChoice(choice, toolNames) {
   if (choice === null || choice === undefined) {
     return { mode: "auto", forced_name: null };
@@ -343,6 +413,13 @@ function normalizeToolChoice(choice, toolNames) {
   throw new Error(`Invalid tool_choice value: ${JSON.stringify(choice)}`);
 }
 
+/**
+ * Builds constrained output schema for function-calling response mode.
+ *
+ * @param {Array<{name: string}>} tools - Available normalized tools.
+ * @param {{ mode: string; forced_name: string | null }} toolChoice - Normalized tool choice.
+ * @return {Record<string, unknown>} Output JSON schema.
+ */
 function buildFunctionOutputSchema(tools, toolChoice) {
   const forcedName = toolChoice.forced_name;
   const mode = toolChoice.mode || "auto";
@@ -379,6 +456,13 @@ function buildFunctionOutputSchema(tools, toolChoice) {
   };
 }
 
+/**
+ * Builds instruction preamble that teaches model how to format tool-call output.
+ *
+ * @param {Array<{name: string; description: string; parameters: Record<string, unknown>}>} tools - Available tools.
+ * @param {{ mode: string; forced_name: string | null }} toolChoice - Tool choice directive.
+ * @return {string} Instruction text prepended to user input.
+ */
 function buildFunctionModeInstruction(tools, toolChoice) {
   const lines = [
     "Function calling mode is enabled.",
@@ -405,6 +489,12 @@ function buildFunctionModeInstruction(tools, toolChoice) {
   return lines.join("\n");
 }
 
+/**
+ * Parses structured function-mode model output and normalizes tool calls.
+ *
+ * @param {string} rawText - Raw model text expected to be JSON.
+ * @return {[string, Array<{name: string; arguments: unknown}>]} Tuple of assistant content and tool calls.
+ */
 function parseFunctionModeOutput(rawText) {
   let data;
   try {
@@ -440,6 +530,12 @@ function parseFunctionModeOutput(rawText) {
   return [content, parsedCalls];
 }
 
+/**
+ * Extracts function calls from native raw turn items.
+ *
+ * @param {unknown} rawCalls - Raw function call items array.
+ * @return {Array<{name: string; arguments: unknown; call_id: unknown}>} Normalized function call records.
+ */
 function collectNativeFunctionCalls(rawCalls) {
   if (!Array.isArray(rawCalls)) {
     return [];
@@ -487,6 +583,12 @@ function collectNativeFunctionCalls(rawCalls) {
   return collected;
 }
 
+/**
+ * Converts normalized function calls to OpenAI chat completion tool call format.
+ *
+ * @param {unknown} calls - Normalized function call array.
+ * @return {Array<Record<string, unknown>>} OpenAI-compatible `tool_calls` array.
+ */
 function toOpenAiToolCalls(calls) {
   if (!Array.isArray(calls)) {
     return [];
@@ -776,6 +878,11 @@ const port = Number(process.env.PORT || 8000);
 
 let server = null;
 
+/**
+ * Starts Codex bridge client and HTTP server.
+ *
+ * @return {Promise<void>} Resolves after server starts listening.
+ */
 async function start() {
   bridge = new CodexRpcClient({
     wsUrl,
@@ -789,6 +896,12 @@ async function start() {
   });
 }
 
+/**
+ * Gracefully stops server and bridge client, then exits process.
+ *
+ * @param {number} [exitCode=0] - Process exit code.
+ * @return {Promise<void>} Resolves when cleanup is complete.
+ */
 async function shutdown(exitCode = 0) {
   try {
     if (server) {

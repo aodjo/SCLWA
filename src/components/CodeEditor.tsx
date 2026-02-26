@@ -7,9 +7,19 @@ interface CodeEditorProps {
   onChange: (code: string) => void;
 }
 
+/**
+ * Renders a simple line-by-line code editor with cursor highlighting.
+ *
+ * @param {CodeEditorProps} props - Component props.
+ * @param {string} props.code - Current full code buffer.
+ * @param {(code: string) => void} props.onChange - Code update callback.
+ * @return {JSX.Element} Editor UI.
+ */
 export function CodeEditor({ code, onChange }: CodeEditorProps) {
   const [cursorLine, setCursorLine] = useState(0);
   const lines = code.split('\n');
+
+  void onChange;
 
   useInput((input, key) => {
     if (key.upArrow) {
@@ -18,18 +28,17 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
     if (key.downArrow) {
       setCursorLine(Math.min(lines.length - 1, cursorLine + 1));
     }
+    void input;
   });
 
   return (
     <Box flexDirection="column" paddingX={1} flexGrow={1}>
       {lines.map((line, index) => (
         <Box key={index}>
-          <Text color="gray">
-            {String(index + 1).padStart(3, ' ')}
-          </Text>
-          <Text color="gray"> │ </Text>
+          <Text color="gray">{String(index + 1).padStart(3, ' ')}</Text>
+          <Text color="gray"> | </Text>
           <Text color={cursorLine === index ? 'cyan' : undefined}>
-            {cursorLine === index ? '›' : ' '}
+            {cursorLine === index ? '> ' : '  '}
           </Text>
           <HighlightedLine line={line} />
         </Box>
@@ -39,7 +48,11 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
 }
 
 /**
- * C 코드 하이라이팅 컴포넌트
+ * Renders one syntax-highlighted C source line.
+ *
+ * @param {{ line: string }} props - Component props.
+ * @param {string} props.line - Raw source line.
+ * @return {JSX.Element} Highlighted line UI.
  */
 export function HighlightedLine({ line }: { line: string }) {
   const tokens = highlightC(line);

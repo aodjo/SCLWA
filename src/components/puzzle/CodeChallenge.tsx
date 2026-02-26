@@ -10,10 +10,14 @@ interface CodeChallengeProps {
 }
 
 /**
- * 코드 작성 퍼즐 컴포넌트
+ * Renders free-form coding challenge puzzle and validates execution output.
+ *
+ * @param {CodeChallengeProps} props - Component props.
+ * @param {Puzzle} props.puzzle - Active coding challenge puzzle.
+ * @param {() => void} props.onComplete - Callback for loading next puzzle.
+ * @return {JSX.Element} Code challenge UI.
  */
 export function CodeChallenge({ puzzle, onComplete }: CodeChallengeProps) {
-  const [code, setCode] = useState('');
   const [lines, setLines] = useState<string[]>(['']);
   const [currentLine, setCurrentLine] = useState(0);
   const [phase, setPhase] = useState<'coding' | 'running' | 'result'>('coding');
@@ -22,55 +26,58 @@ export function CodeChallenge({ puzzle, onComplete }: CodeChallengeProps) {
   const [showHint, setShowHint] = useState(false);
 
   /**
-   * 줄 입력 처리
+   * Handles one submitted editor line and runs evaluation when input ends.
+   *
+   * @param {string} value - Submitted line text.
+   * @return {Promise<void>} Resolves after run result state is updated.
    */
-  const handleLineSubmit = async (value: string) => {
+  const handleLineSubmit = async (value: string): Promise<void> => {
     const newLines = [...lines];
     newLines[currentLine] = value;
 
     if (value.trim() === '' && currentLine > 0) {
-      const fullCode = newLines.filter((l) => l.trim()).join('\n');
-      setCode(fullCode);
+      const fullCode = newLines.filter((line) => line.trim()).join('\n');
       setPhase('running');
 
       try {
         const result = await runCCodeLocal(wrapCode(fullCode));
-        setOutput(result.output || result.error || 'No output');
+        const finalOutput = result.output || result.error || 'No output';
+        setOutput(finalOutput);
         setIsCorrect(
           result.success &&
-          result.output?.trim() === puzzle.expectedOutput?.trim()
+          (result.output?.trim() || '') === (puzzle.expectedOutput?.trim() || '')
         );
       } catch (err) {
-        setOutput(`Error: ${err}`);
+        setOutput(`Error: ${String(err)}`);
         setIsCorrect(false);
       }
 
       setPhase('result');
-    } else {
-      newLines.push('');
-      setLines(newLines);
-      setCurrentLine(currentLine + 1);
+      return;
     }
+
+    newLines.push('');
+    setLines(newLines);
+    setCurrentLine(currentLine + 1);
   };
 
   /**
-   * 코드를 main 함수로 감싸기
+   * Wraps snippet code with `main` when user omitted full program structure.
+   *
+   * @param {string} userCode - User-written code snippet.
+   * @return {string} Executable C source text.
    */
   const wrapCode = (userCode: string): string => {
     if (userCode.includes('main')) {
       return userCode;
     }
-    return `#include <stdio.h>
-int main() {
-${userCode}
-    return 0;
-}`;
+    return `#include <stdio.h>\nint main() {\n${userCode}\n    return 0;\n}`;
   };
 
   if (phase === 'running') {
     return (
       <Box flexDirection="column" marginTop={1}>
-        <Text color="yellow">코드 실행 중...</Text>
+        <Text color="yellow">Running code...</Text>
       </Box>
     );
   }
@@ -78,24 +85,19 @@ ${userCode}
   if (phase === 'result') {
     return (
       <Box flexDirection="column" marginTop={1}>
-        <Box
-          borderStyle="round"
-          borderColor={isCorrect ? 'green' : 'red'}
-          paddingX={2}
-          paddingY={1}
-        >
+        <Box borderStyle="round" borderColor={isCorrect ? 'green' : 'red'} paddingX={2} paddingY={1}>
           <Text color={isCorrect ? 'green' : 'red'}>
-            {isCorrect ? '정답입니다!' : '출력이 다릅니다.'}
+            {isCorrect ? 'Correct!' : 'Output does not match expected value.'}
           </Text>
         </Box>
 
         <Box marginTop={1} flexDirection="column">
-          <Text color="cyan">예상 출력: {puzzle.expectedOutput}</Text>
-          <Text color="yellow">실제 출력: {output}</Text>
+          <Text color="cyan">Expected: {puzzle.expectedOutput}</Text>
+          <Text color="yellow">Actual: {output}</Text>
         </Box>
 
         <Box marginTop={1}>
-          <Text color="gray">Enter를 눌러 다음 문제로...</Text>
+          <Text color="gray">Press Enter for next puzzle.</Text>
         </Box>
         <TextInput value="" onChange={() => {}} onSubmit={onComplete} />
       </Box>
@@ -105,17 +107,10 @@ ${userCode}
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text color="gray">{puzzle.description}</Text>
-      <Text color="cyan">예상 출력: {puzzle.expectedOutput}</Text>
-      <Text color="gray">빈 줄 입력으로 코드 제출</Text>
+      <Text color="cyan">Expected output: {puzzle.expectedOutput}</Text>
+      <Text color="gray">Submit empty line to run code.</Text>
 
-      <Box
-        borderStyle="round"
-        borderColor="gray"
-        paddingX={2}
-        paddingY={1}
-        marginTop={1}
-        flexDirection="column"
-      >
+      <Box borderStyle="round" borderColor="gray" paddingX={2} paddingY={1} marginTop={1} flexDirection="column">
         {lines.map((line, i) => (
           <Box key={i}>
             <Text color="gray">{String(i + 1).padStart(2)}| </Text>
@@ -128,7 +123,7 @@ ${userCode}
                   setLines(newLines);
                 }}
                 onSubmit={handleLineSubmit}
-                placeholder="코드를 입력하세요..."
+                placeholder="Type code here..."
               />
             ) : (
               <Text color="green">{line}</Text>
@@ -139,7 +134,7 @@ ${userCode}
 
       {showHint && puzzle.hints[0] && (
         <Box marginTop={1}>
-          <Text color="yellow">힌트: {puzzle.hints[0]}</Text>
+          <Text color="yellow">Hint: {puzzle.hints[0]}</Text>
         </Box>
       )}
     </Box>

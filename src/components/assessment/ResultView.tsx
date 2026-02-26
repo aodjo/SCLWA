@@ -8,7 +8,12 @@ interface ResultViewProps {
 }
 
 /**
- * 평가 결과 화면
+ * Shows assessment summary and waits for user confirmation to continue.
+ *
+ * @param {ResultViewProps} props - Component props.
+ * @param {AssessmentResult} props.result - Computed assessment result.
+ * @param {() => void} props.onContinue - Continue callback.
+ * @return {JSX.Element} Result screen UI.
  */
 export function ResultView({ result, onContinue }: ResultViewProps) {
   useInput((char, key) => {
@@ -18,63 +23,67 @@ export function ResultView({ result, onContinue }: ResultViewProps) {
   });
 
   const levelLabels: Record<string, string> = {
-    beginner: '초급',
-    intermediate: '중급',
-    advanced: '고급',
+    beginner: 'Beginner',
+    intermediate: 'Intermediate',
+    advanced: 'Advanced',
   };
 
   return (
     <Box flexDirection="column" padding={2}>
-      <Text bold color="green">평가 완료</Text>
+      <Text bold color="green">Assessment Complete</Text>
 
-      <Box
-        borderStyle="round"
-        borderColor="gray"
-        paddingX={2}
-        paddingY={1}
-        marginY={1}
-        flexDirection="column"
-      >
+      <Box borderStyle="round" borderColor="gray" paddingX={2} paddingY={1} marginY={1} flexDirection="column">
         <Box>
-          <Text>레벨: </Text>
+          <Text>Level: </Text>
           <Text bold color="cyan">{levelLabels[result.skillLevel]}</Text>
         </Box>
 
         <Box marginTop={1} flexDirection="column">
-          <Text color="gray">분야별 점수</Text>
-          <ScoreBar label="기초" score={result.scores.basics} />
-          <ScoreBar label="배열" score={result.scores.arrays} />
-          <ScoreBar label="포인터" score={result.scores.pointers} />
-          <ScoreBar label="구조체" score={result.scores.structs} />
-          <ScoreBar label="함수" score={result.scores.functions} />
+          <Text color="gray">Scores by category</Text>
+          <ScoreBar label="Basics" score={result.scores.basics} />
+          <ScoreBar label="Arrays" score={result.scores.arrays} />
+          <ScoreBar label="Pointers" score={result.scores.pointers} />
+          <ScoreBar label="Structs" score={result.scores.structs} />
+          <ScoreBar label="Functions" score={result.scores.functions} />
         </Box>
       </Box>
 
       {result.weakAreas.length > 0 && (
         <Box flexDirection="column">
-          <Text color="yellow">보완 필요: </Text>
+          <Text color="yellow">Needs work:</Text>
           <Text color="gray">{result.recommendedTopics.join(', ')}</Text>
         </Box>
       )}
 
-      <Text color="gray">Enter로 시작</Text>
+      <Text color="gray">Press Enter to continue</Text>
     </Box>
   );
 }
 
+/**
+ * Renders one category score bar.
+ *
+ * @param {{ label: string; score: number }} props - Bar props.
+ * @param {string} props.label - Category label.
+ * @param {number} props.score - Score percentage (0-100).
+ * @return {JSX.Element} Score bar UI.
+ */
 function ScoreBar({ label, score }: { label: string; score: number }) {
   const filled = Math.round(score / 10);
   const empty = 10 - filled;
 
   let color: string = 'red';
-  if (score >= 70) color = 'green';
-  else if (score >= 40) color = 'yellow';
+  if (score >= 70) {
+    color = 'green';
+  } else if (score >= 40) {
+    color = 'yellow';
+  }
 
   return (
     <Box>
-      <Text>{label.padEnd(5)}</Text>
-      <Text color={color}>{'█'.repeat(filled)}</Text>
-      <Text color="gray">{'░'.repeat(empty)}</Text>
+      <Text>{label.padEnd(9)}</Text>
+      <Text color={color}>{'?'.repeat(filled)}</Text>
+      <Text color="gray">{'?'.repeat(empty)}</Text>
       <Text color="gray"> {score}%</Text>
     </Box>
   );

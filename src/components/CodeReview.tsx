@@ -14,8 +14,11 @@ interface ReviewLine {
 }
 
 /**
- * 코드 리뷰 컴포넌트
- * Codex AI가 코드를 분석하고 한 줄씩 설명
+ * Renders AI-assisted code review output for the current code buffer.
+ *
+ * @param {CodeReviewProps} props - Component props.
+ * @param {string} props.code - C source code to analyze.
+ * @return {JSX.Element} Code review UI.
  */
 export function CodeReview({ code }: CodeReviewProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -24,9 +27,9 @@ export function CodeReview({ code }: CodeReviewProps) {
   const [overallReview, setOverallReview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useInput((char, key) => {
+  useInput((_, key) => {
     if (key.return && !isAnalyzing && reviewLines.length === 0) {
-      analyzeCode();
+      void analyzeCode();
     }
     if (key.upArrow && currentLine > 0) {
       setCurrentLine(currentLine - 1);
@@ -37,27 +40,15 @@ export function CodeReview({ code }: CodeReviewProps) {
   });
 
   /**
-   * Codex로 코드 분석 요청
+   * Requests line-by-line analysis from Codex and stores parsed result.
+   *
+   * @return {Promise<void>} Resolves after review state is updated.
    */
-  const analyzeCode = async () => {
+  const analyzeCode = async (): Promise<void> => {
     setIsAnalyzing(true);
     setError(null);
 
-    const prompt = `다음 C 코드를 분석하고 한국어로 설명해주세요.
-
-코드:
-\`\`\`c
-${code}
-\`\`\`
-
-응답 형식 (JSON):
-{
-  "lines": [
-    {"lineNumber": 1, "code": "코드 내용", "explanation": "이 줄의 설명"},
-    ...
-  ],
-  "overall": "전체 코드에 대한 요약 평가, 개선점 제안"
-}`;
+    const prompt = `Analyze the following C code and explain each line in Korean.\n\nCode:\n\`\`\`c\n${code}\n\`\`\`\n\nRespond in JSON:\n{\n  "lines": [{"lineNumber": 1, "code": "...", "explanation": "..."}],\n  "overall": "..."\n}`;
 
     try {
       const client = getCodexClient();
@@ -79,11 +70,11 @@ ${code}
         setReviewLines(lines);
       }
     } catch (err) {
-      setError(`분석 실패: ${err}`);
+      setError(`Analysis failed: ${String(err)}`);
       const lines = code.split('\n').map((line, i) => ({
         lineNumber: i + 1,
         code: line,
-        explanation: '(Codex 연결 필요)',
+        explanation: '(Codex connection required)',
       }));
       setReviewLines(lines);
     } finally {
@@ -95,10 +86,8 @@ ${code}
     return (
       <Box flexDirection="column" padding={1}>
         <Box>
-          <Text color="cyan">
-            <Spinner type="dots" />
-          </Text>
-          <Text color="gray"> AI가 코드를 분석하고 있습니다...</Text>
+          <Text color="cyan"><Spinner type="dots" /></Text>
+          <Text color="gray"> Analyzing code...</Text>
         </Box>
       </Box>
     );
@@ -107,10 +96,10 @@ ${code}
   if (reviewLines.length === 0) {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold color="cyan">코드 리뷰 모드</Text>
-        <Text color="gray">AI가 코드를 분석하고 한 줄씩 설명합니다</Text>
+        <Text bold color="cyan">Code Review Mode</Text>
+        <Text color="gray">Press Enter to request analysis.</Text>
         <Box marginTop={1}>
-          <Text color="green">Enter를 눌러 분석 시작...</Text>
+          <Text color="green">Press Enter to start...</Text>
         </Box>
         {error && (
           <Box marginTop={1}>
@@ -125,8 +114,8 @@ ${code}
 
   return (
     <Box flexDirection="column" padding={1} height="100%">
-      <Text bold color="cyan">코드 리뷰</Text>
-      <Text color="gray">화살표로 줄 선택</Text>
+      <Text bold color="cyan">Code Review</Text>
+      <Text color="gray">Use arrow keys to select a line</Text>
 
       <Box
         flexDirection="column"
@@ -140,12 +129,10 @@ ${code}
         {reviewLines.map((line, i) => (
           <Box key={i}>
             <Text color={i === currentLine ? 'cyan' : 'gray'}>
-              {i === currentLine ? '›' : ' '}
+              {i === currentLine ? '> ' : '  '}
             </Text>
             <Text color="gray">{String(line.lineNumber).padStart(2)}| </Text>
-            <Text color={i === currentLine ? 'white' : 'green'}>
-              {line.code}
-            </Text>
+            <Text color={i === currentLine ? 'white' : 'green'}>{line.code}</Text>
           </Box>
         ))}
       </Box>
@@ -158,12 +145,8 @@ ${code}
         marginTop={1}
         flexGrow={1}
       >
-        <Text bold color="cyan">
-          {selectedReview?.lineNumber}번 줄 설명:
-        </Text>
-        <Text wrap="wrap">
-          {selectedReview?.explanation || '설명 없음'}
-        </Text>
+        <Text bold color="cyan">Line {selectedReview?.lineNumber}:</Text>
+        <Text wrap="wrap">{selectedReview?.explanation || 'No explanation'}</Text>
       </Box>
 
       {overallReview && (
@@ -174,7 +157,7 @@ ${code}
           paddingX={1}
           marginTop={1}
         >
-          <Text bold color="yellow">전체 평가:</Text>
+          <Text bold color="yellow">Overall:</Text>
           <Text wrap="wrap" color="gray">{overallReview}</Text>
         </Box>
       )}

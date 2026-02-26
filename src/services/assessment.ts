@@ -32,14 +32,15 @@ const CATEGORIES: AssessmentQuestion['category'][] = [
   'arrays',
   'pointers',
   'functions',
-  'structs'
+  'structs',
 ];
 
 /**
- * Codex를 사용해 평가 문제 생성
- * @param category - 문제 카테고리
- * @param difficulty - 난이도
- * @returns 생성된 문제
+ * Uses Codex to generate one assessment question for a specific category and difficulty.
+ *
+ * @param {AssessmentQuestion['category']} category - Topic bucket for the generated question.
+ * @param {1 | 2 | 3} difficulty - Difficulty level where 1 is easiest and 3 is hardest.
+ * @return {Promise<AssessmentQuestion>} Generated assessment question with answer and hints.
  */
 export async function generateQuestion(
   category: AssessmentQuestion['category'],
@@ -75,10 +76,11 @@ export async function generateQuestion(
 }
 
 /**
- * AI가 생성하는 평가 문제 목록 가져오기
- * @param count - 문제 개수 (기본 5개)
- * @param onProgress - 진행 상황 콜백
- * @returns 생성된 문제 목록
+ * Generates a sequence of assessment questions and optionally reports progress.
+ *
+ * @param {number} [count=5] - Number of questions to generate.
+ * @param {(current: number, total: number) => void} [onProgress] - Optional per-question progress callback.
+ * @return {Promise<AssessmentQuestion[]>} Generated assessment question list.
  */
 export async function getAssessmentQuestions(
   count = 5,
@@ -101,10 +103,11 @@ export async function getAssessmentQuestions(
 }
 
 /**
- * 답변 채점
- * @param question - 문제
- * @param userAnswer - 사용자 답변
- * @returns 정답 여부
+ * Validates a user answer against the expected answer for one question.
+ *
+ * @param {AssessmentQuestion} question - Question containing canonical answer text.
+ * @param {string} userAnswer - Raw answer submitted by the learner.
+ * @return {boolean} `true` if normalized answers match.
  */
 export function checkAnswer(question: AssessmentQuestion, userAnswer: string): boolean {
   const normalized = userAnswer.trim().toLowerCase();
@@ -113,10 +116,11 @@ export function checkAnswer(question: AssessmentQuestion, userAnswer: string): b
 }
 
 /**
- * 평가 결과 계산
- * @param questions - 출제된 문제 목록
- * @param answers - 사용자 답변 목록
- * @returns 평가 결과
+ * Calculates category scores, inferred skill level, and recommended follow-up topics.
+ *
+ * @param {AssessmentQuestion[]} questions - Ordered list of asked questions.
+ * @param {string[]} answers - Ordered list of submitted answers.
+ * @return {AssessmentResult} Computed assessment summary.
  */
 export function calculateAssessmentResult(
   questions: AssessmentQuestion[],

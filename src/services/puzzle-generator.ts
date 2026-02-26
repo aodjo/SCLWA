@@ -68,11 +68,12 @@ const DIFFICULTY_BY_LEVEL: Record<SkillLevel, 1 | 2 | 3> = {
 };
 
 /**
- * Codex를 사용해 퍼즐 생성
- * @param type - 퍼즐 유형
- * @param skillLevel - 사용자 실력 레벨
- * @param topic - 특정 주제 (선택)
- * @returns 생성된 퍼즐
+ * Generates one puzzle with Codex for the requested type and learner level.
+ *
+ * @param {PuzzleType} type - Puzzle format to generate.
+ * @param {SkillLevel} [skillLevel='beginner'] - Learner level used to pick difficulty and topics.
+ * @param {string} [topic] - Optional explicit topic override.
+ * @return {Promise<Puzzle>} Generated puzzle payload.
  */
 export async function generatePuzzle(
   type: PuzzleType,
@@ -110,16 +111,17 @@ export async function generatePuzzle(
       hints: data.hints || [],
       difficulty,
     };
-  } catch (error) {
+  } catch {
     throw new Error('퍼즐 생성 실패: Codex 연결을 확인하세요');
   }
 }
 
 /**
- * 여러 퍼즐 한 번에 생성
- * @param types - 생성할 퍼즐 유형들
- * @param skillLevel - 사용자 실력 레벨
- * @returns 생성된 퍼즐 배열
+ * Generates multiple puzzles sequentially for the requested set of types.
+ *
+ * @param {PuzzleType[]} types - Puzzle types to generate.
+ * @param {SkillLevel} [skillLevel='beginner'] - Learner level applied to each generated puzzle.
+ * @return {Promise<Puzzle[]>} Generated puzzle list in the same order as `types`.
  */
 export async function generatePuzzleBatch(
   types: PuzzleType[],

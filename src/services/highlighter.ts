@@ -1,32 +1,35 @@
-// C 구문 하이라이팅
-
 export interface Token {
   text: string;
   color?: string;
 }
 
-// C 키워드
 const keywords = new Set([
   'auto', 'break', 'case', 'char', 'const', 'continue', 'default', 'do',
   'double', 'else', 'enum', 'extern', 'float', 'for', 'goto', 'if',
   'int', 'long', 'register', 'return', 'short', 'signed', 'sizeof', 'static',
-  'struct', 'switch', 'typedef', 'union', 'unsigned', 'void', 'volatile', 'while'
+  'struct', 'switch', 'typedef', 'union', 'unsigned', 'void', 'volatile', 'while',
 ]);
 
-// 타입
 const types = new Set([
-  'int', 'char', 'float', 'double', 'void', 'long', 'short', 'unsigned', 'signed'
+  'int', 'char', 'float', 'double', 'void', 'long', 'short', 'unsigned', 'signed',
 ]);
 
-// 전처리기 지시어
-const preprocessor = ['#include', '#define', '#ifdef', '#ifndef', '#endif', '#if', '#else', '#elif', '#pragma'];
+const preprocessor = [
+  '#include', '#define', '#ifdef', '#ifndef', '#endif', '#if', '#else', '#elif', '#pragma',
+];
 
+/**
+ * Tokenizes a single line of C code and annotates each token with a display color.
+ *
+ * @param {string} line - Raw source line from the editor.
+ * @return {Token[]} Ordered token list suitable for syntax-highlight rendering.
+ */
 export function highlightC(line: string): Token[] {
   const tokens: Token[] = [];
   let remaining = line;
 
   while (remaining.length > 0) {
-    const prepMatch = preprocessor.find(p => remaining.startsWith(p));
+    const prepMatch = preprocessor.find((p) => remaining.startsWith(p));
     if (prepMatch) {
       tokens.push({ text: remaining, color: 'magenta' });
       break;

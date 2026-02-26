@@ -8,16 +8,23 @@ interface TabBarProps {
 }
 
 const tabs: { key: string; label: string; mode: AppMode }[] = [
-  { key: '1', label: '튜터링', mode: 'tutoring' },
-  { key: '2', label: '퍼즐', mode: 'puzzle' },
-  { key: '3', label: '리뷰', mode: 'review' },
-  { key: '4', label: '설정', mode: 'settings' },
+  { key: '1', label: 'Tutor', mode: 'tutoring' },
+  { key: '2', label: 'Puzzle', mode: 'puzzle' },
+  { key: '3', label: 'Review', mode: 'review' },
+  { key: '4', label: 'Settings', mode: 'settings' },
 ];
 
 /**
- * 상단 탭 바
+ * Renders the top tab bar for selecting tutor modes.
+ *
+ * @param {TabBarProps} props - Component props.
+ * @param {AppMode} props.currentMode - Currently active mode.
+ * @param {(mode: AppMode) => void} props.onModeChange - Mode change callback.
+ * @return {JSX.Element} Tab bar UI.
  */
 export function TabBar({ currentMode, onModeChange }: TabBarProps) {
+  void onModeChange;
+
   return (
     <Box borderStyle="round" borderColor="gray" paddingX={1} justifyContent="space-between">
       <Box gap={2}>

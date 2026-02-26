@@ -1,13 +1,21 @@
-// 앱 모드
+/**
+ * Top-level application mode used for tab navigation.
+ */
 export type AppMode = 'tutoring' | 'puzzle' | 'review' | 'settings' | 'assessment';
 
-// 퍼즐 유형
+/**
+ * Supported puzzle generation formats.
+ */
 export type PuzzleType = 'fill-blank' | 'bug-finder' | 'code-challenge';
 
-// 실력 레벨
+/**
+ * Skill bucket derived from onboarding assessment.
+ */
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced';
 
-// 채팅 메시지
+/**
+ * One chat message exchanged between user and assistant.
+ */
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -15,21 +23,25 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
-// 퍼즐 문제
+/**
+ * Puzzle payload returned by puzzle generation service.
+ */
 export interface Puzzle {
   id: string;
   type: PuzzleType;
   title: string;
   description: string;
   code: string;
-  blanks?: string[];      // fill-blank용
-  bugLine?: number;       // bug-finder용
+  blanks?: string[];
+  bugLine?: number;
   expectedOutput?: string;
   hints: string[];
   difficulty: 1 | 2 | 3;
 }
 
-// 평가 결과
+/**
+ * Result summary produced by assessment scoring logic.
+ */
 export interface AssessmentResult {
   skillLevel: SkillLevel;
   assessmentDate: string;
@@ -44,7 +56,9 @@ export interface AssessmentResult {
   recommendedTopics: string[];
 }
 
-// 학습 진행 상황
+/**
+ * Persisted learner progress document stored on disk.
+ */
 export interface Progress {
   completedPuzzles: string[];
   currentTopic: string;
@@ -53,7 +67,9 @@ export interface Progress {
   assessment?: AssessmentResult;
 }
 
-// 컴파일 결과
+/**
+ * Compilation or execution result for C code runs.
+ */
 export interface CompileResult {
   success: boolean;
   output?: string;
@@ -61,7 +77,9 @@ export interface CompileResult {
   exitCode: number;
 }
 
-// Codex 턴 결과
+/**
+ * Lightweight turn metadata shape used by UI services.
+ */
 export interface TurnResult {
   threadId: string;
   turnId: string;

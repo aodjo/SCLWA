@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
@@ -21,15 +21,18 @@ const CATEGORIES: AssessmentQuestion['category'][] = [
   'arrays',
   'pointers',
   'functions',
-  'structs'
+  'structs',
 ];
 
 const TOTAL_QUESTIONS = 5;
-
 type Phase = 'generating' | 'answering' | 'result';
 
 /**
- * 실력 평가 화면 컴포넌트
+ * Runs onboarding assessment flow from question generation to final result.
+ *
+ * @param {AssessmentViewProps} props - Component props.
+ * @param {(result: AssessmentResult) => void} props.onComplete - Completion callback.
+ * @return {JSX.Element} Assessment UI.
  */
 export function AssessmentView({ onComplete }: AssessmentViewProps) {
   const [phase, setPhase] = useState<Phase>('generating');
@@ -43,23 +46,29 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    generateNextQuestion(0);
+    void generateNextQuestion(0);
   }, []);
 
-  const generateNextQuestion = async (index: number) => {
+  /**
+   * Generates the next assessment question by index.
+   *
+   * @param {number} index - Zero-based question index.
+   * @return {Promise<void>} Resolves after question or error state is updated.
+   */
+  const generateNextQuestion = async (index: number): Promise<void> => {
     setPhase('generating');
     setError(null);
     setShowHint(false);
 
     const category = CATEGORIES[index % CATEGORIES.length];
-    const difficulty = (Math.floor(index / 2) + 1) as 1 | 2 | 3;
+    const difficulty = Math.min(Math.floor(index / 2) + 1, 3) as 1 | 2 | 3;
 
     try {
-      const question = await generateQuestion(category, Math.min(difficulty, 3) as 1 | 2 | 3);
+      const question = await generateQuestion(category, difficulty);
       setCurrentQuestion(question);
       setPhase('answering');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '문제 생성 실패');
+      setError(err instanceof Error ? err.message : 'Failed to generate question');
     }
   };
 
@@ -68,12 +77,20 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
       setShowHint(!showHint);
     }
     if (char === 'r' && error) {
-      generateNextQuestion(currentIndex);
+      void generateNextQuestion(currentIndex);
     }
   });
 
-  const handleSubmit = async (value: string) => {
-    if (!currentQuestion) return;
+  /**
+   * Stores current answer and moves to next question or result view.
+   *
+   * @param {string} value - User-submitted answer text.
+   * @return {Promise<void>} Resolves after assessment state transition.
+   */
+  const handleSubmit = async (value: string): Promise<void> => {
+    if (!currentQuestion) {
+      return;
+    }
 
     const newQuestions = [...questions, currentQuestion];
     const newAnswers = [...answers, value];
@@ -86,11 +103,12 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
       await saveAssessment(assessmentResult);
       setResult(assessmentResult);
       setPhase('result');
-    } else {
-      const nextIndex = currentIndex + 1;
-      setCurrentIndex(nextIndex);
-      generateNextQuestion(nextIndex);
+      return;
     }
+
+    const nextIndex = currentIndex + 1;
+    setCurrentIndex(nextIndex);
+    await generateNextQuestion(nextIndex);
   };
 
   if (phase === 'generating') {
@@ -98,7 +116,7 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
       <Box flexDirection="column">
         <Box borderStyle="round" borderColor="gray" flexDirection="column">
           <Box paddingX={2} justifyContent="space-between">
-            <Text bold color="cyan">C 실력 평가</Text>
+            <Text bold color="cyan">C Skill Assessment</Text>
             <Text color="gray">{currentIndex + 1}/{TOTAL_QUESTIONS}</Text>
           </Box>
           <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
@@ -106,12 +124,12 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
             {error ? (
               <Box flexDirection="column">
                 <Text color="red">{error}</Text>
-                <Text color="gray">R: 다시 시도</Text>
+                <Text color="gray">R: retry</Text>
               </Box>
             ) : (
               <Box>
                 <Text color="cyan"><Spinner type="dots" /></Text>
-                <Text> 문제 생성 중...</Text>
+                <Text> Generating question...</Text>
               </Box>
             )}
           </Box>
@@ -125,14 +143,14 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
   }
 
   if (!currentQuestion) {
-    return <Text color="red">문제를 불러올 수 없습니다.</Text>;
+    return <Text color="red">Could not load question.</Text>;
   }
 
   return (
     <Box flexDirection="column">
       <Box borderStyle="round" borderColor="gray" flexDirection="column">
         <Box paddingX={2} justifyContent="space-between">
-          <Text bold color="cyan">C 실력 평가</Text>
+          <Text bold color="cyan">C Skill Assessment</Text>
           <Box>
             <Text color="gray">{currentIndex + 1}/{TOTAL_QUESTIONS}</Text>
             <Text color="yellow"> {currentQuestion.category}</Text>
@@ -156,24 +174,24 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
 
         {showHint && currentQuestion.hints[0] && (
           <Box paddingX={2}>
-            <Text color="yellow" wrap="wrap">힌트: {currentQuestion.hints[0]}</Text>
+            <Text color="yellow" wrap="wrap">Hint: {currentQuestion.hints[0]}</Text>
           </Box>
         )}
 
         <Box paddingX={2}>
-          <Text color="cyan">{'> '}</Text>
+          <Text color="cyan">{'>'} </Text>
           <TextInput
             value={input}
             onChange={setInput}
             onSubmit={handleSubmit}
-            placeholder="정답 입력"
+            placeholder="Type answer"
           />
         </Box>
 
         <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
 
         <Box paddingX={2}>
-          <Text color="gray">H: 힌트</Text>
+          <Text color="gray">H: hint</Text>
         </Box>
       </Box>
     </Box>
