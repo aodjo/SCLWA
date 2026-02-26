@@ -146,6 +146,10 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
     return <Text color="red">Could not load question.</Text>;
   }
 
+  const questionCodeLines = currentQuestion.code
+    ? currentQuestion.code.replace(/\\n/g, '\n').split('\n')
+    : [];
+
   return (
     <Box flexDirection="column">
       <Box borderStyle="round" borderColor="gray" flexDirection="column">
@@ -163,8 +167,12 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
           <Text>{currentQuestion.question}</Text>
           {currentQuestion.code && (
             <Box marginTop={1} flexDirection="column">
-              {currentQuestion.code.replace(/\\n/g, '\n').split('\n').map((line, i) => (
-                <HighlightedLine key={i} line={line} />
+              {questionCodeLines.map((line, i) => (
+                <Box key={i}>
+                  <Text color="gray">{String(i + 1).padStart(3, ' ')}</Text>
+                  <Text color="gray"> | </Text>
+                  <HighlightedLine line={line} />
+                </Box>
               ))}
             </Box>
           )}
