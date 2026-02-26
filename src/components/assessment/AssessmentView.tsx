@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import type { ComponentType } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
-import * as SyntaxHighlightModule from 'ink-syntax-highlight';
 import {
   generateQuestion,
   calculateAssessmentResult,
@@ -12,6 +10,7 @@ import {
 import { saveAssessment } from '../../services/storage.js';
 import type { AssessmentResult } from '../../types/index.js';
 import { ResultView } from './ResultView.js';
+import { HighlightedLine } from '../CodeEditor.js';
 
 interface AssessmentViewProps {
   onComplete: (result: AssessmentResult) => void;
@@ -35,16 +34,6 @@ const CATEGORY_LABELS: Record<AssessmentQuestion['category'], string> = {
 const TOTAL_QUESTIONS = 5;
 type Phase = 'generating' | 'answering' | 'result';
 
-type SyntaxHighlightProps = {
-  code: string;
-  language?: string;
-};
-
-const SyntaxHighlight =
-  (('default' in SyntaxHighlightModule
-    ? SyntaxHighlightModule.default
-    : SyntaxHighlightModule) as unknown as ComponentType<SyntaxHighlightProps>);
-
 /**
  * Renders one syntax-highlighted code line with line number.
  *
@@ -58,7 +47,7 @@ function AssessmentCodeLine({ line, lineNumber }: { line: string; lineNumber: nu
     <Box>
       <Text color="gray">{String(lineNumber).padStart(3, ' ')}</Text>
       <Text color="gray"> | </Text>
-      <SyntaxHighlight code={line.length > 0 ? line : ' '} language="c" />
+      <HighlightedLine line={line.length > 0 ? line : ' '} />
     </Box>
   );
 }
