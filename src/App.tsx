@@ -59,7 +59,7 @@ export function App() {
    */
   const connectToGemini = async (): Promise<void> => {
     try {
-      const client = getGeminiClient();
+      const client = await getGeminiClient();
       await client.start();
       setAppState('assessment');
     } catch (err) {
@@ -122,7 +122,7 @@ export function App() {
             <>
               <Text color="red">{connectionError}</Text>
               <Box marginTop={1} flexDirection="column">
-                <Text color="gray">Set GEMINI_API_KEY (or GOOGLE_API_KEY)</Text>
+                <Text color="gray">저장된 Gemini API 키를 확인하세요.</Text>
               </Box>
               <Box marginTop={1}>
                 <Text color="gray">R: retry | S: start without Gemini</Text>

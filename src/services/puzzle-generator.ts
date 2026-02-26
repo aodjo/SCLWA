@@ -89,7 +89,7 @@ export async function generatePuzzle(
     .replace('{topic}', selectedTopic);
 
   try {
-    const client = getGeminiClient();
+    const client = await getGeminiClient();
     const result = await client.runTurn({
       prompt,
       timeoutSeconds: 40,

@@ -6,8 +6,13 @@ import type { Progress, AssessmentResult, ChatMessage } from '../types/index.js'
 
 const STORAGE_DIR = join(homedir(), '.c-tutor');
 const PROGRESS_FILE = join(STORAGE_DIR, 'progress.json');
+const CONFIG_FILE = join(STORAGE_DIR, 'config.json');
 const HISTORY_DIR = join(STORAGE_DIR, 'history');
 const CODE_DIR = join(STORAGE_DIR, 'code');
+
+interface AppConfig {
+  geminiApiKey?: string;
+}
 
 /**
  * Ensures all local storage directories exist.
@@ -43,6 +48,59 @@ export async function loadProgress(): Promise<Progress> {
   } catch {
     return getDefaultProgress();
   }
+}
+
+/**
+ * Loads local application configuration from disk.
+ *
+ * @return {Promise<AppConfig>} Stored config object, or empty config when missing.
+ */
+async function loadConfig(): Promise<AppConfig> {
+  try {
+    const data = await readFile(CONFIG_FILE, 'utf-8');
+    return JSON.parse(data) as AppConfig;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Persists local application configuration to disk.
+ *
+ * @param {AppConfig} config - Configuration payload to store.
+ * @return {Promise<void>} Resolves after config write completes.
+ */
+async function saveConfig(config: AppConfig): Promise<void> {
+  await initStorage();
+  await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+/**
+ * Loads the persisted Gemini API key.
+ *
+ * @return {Promise<string | null>} Stored API key, or `null` when not configured.
+ */
+export async function loadGeminiApiKey(): Promise<string | null> {
+  const config = await loadConfig();
+  const apiKey = config.geminiApiKey?.trim();
+  return apiKey ? apiKey : null;
+}
+
+/**
+ * Stores the Gemini API key in local app configuration.
+ *
+ * @param {string} apiKey - Gemini API key string.
+ * @return {Promise<void>} Resolves after key is written.
+ */
+export async function saveGeminiApiKey(apiKey: string): Promise<void> {
+  const normalized = apiKey.trim();
+  if (!normalized) {
+    throw new Error('Gemini API 키가 비어 있습니다.');
+  }
+
+  const config = await loadConfig();
+  config.geminiApiKey = normalized;
+  await saveConfig(config);
 }
 
 /**

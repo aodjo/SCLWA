@@ -51,7 +51,7 @@ export function CodeReview({ code }: CodeReviewProps) {
     const prompt = `Analyze the following C code and explain each line in Korean.\n\nCode:\n\`\`\`c\n${code}\n\`\`\`\n\nRespond in JSON:\n{\n  "lines": [{"lineNumber": 1, "code": "...", "explanation": "..."}],\n  "overall": "..."\n}`;
 
     try {
-      const client = getGeminiClient();
+      const client = await getGeminiClient();
       await client.start();
       const result = await client.runTurn({
         prompt,

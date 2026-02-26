@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { loadGeminiApiKey } from './storage.js';
 
 export interface RunTurnOptions {
   prompt?: string | null;
@@ -64,17 +65,13 @@ export class GeminiClient {
   private started = false;
 
   /**
-   * Builds a Gemini API client with env-based API key/model defaults.
+   * Builds a Gemini API client with persisted API key.
    *
+   * @param {string} apiKey - Gemini API key loaded from local config.
    * @return {GeminiClient} Constructed Gemini client.
    */
-  constructor() {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY 또는 GOOGLE_API_KEY 환경변수를 설정하세요.');
-    }
-
-    this.defaultModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  constructor(apiKey: string) {
+    this.defaultModel = 'gemini-2.5-flash';
     this.ai = new GoogleGenAI({ apiKey });
   }
 
@@ -160,11 +157,16 @@ let clientInstance: GeminiClient | null = null;
 /**
  * Returns a singleton Gemini client instance.
  *
- * @return {GeminiClient} Shared Gemini API client.
+ * @return {Promise<GeminiClient>} Shared Gemini API client.
  */
-export function getGeminiClient(): GeminiClient {
+export async function getGeminiClient(): Promise<GeminiClient> {
   if (!clientInstance) {
-    clientInstance = new GeminiClient();
+    const apiKey = await loadGeminiApiKey();
+    if (!apiKey) {
+      throw new Error('저장된 Gemini API 키가 없습니다. 앱을 다시 시작해 키를 먼저 설정하세요.');
+    }
+
+    clientInstance = new GeminiClient(apiKey);
   }
   return clientInstance;
 }

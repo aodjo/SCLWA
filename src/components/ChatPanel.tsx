@@ -44,7 +44,7 @@ export function ChatPanel() {
     setIsLoading(true);
 
     try {
-      const client = getGeminiClient();
+      const client = await getGeminiClient();
       await client.start();
       const result = await client.runTurn({
         prompt: `You are a C programming tutor. Answer in Korean. User question: ${value}`,

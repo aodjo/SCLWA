@@ -130,7 +130,7 @@ function normalizeAssessmentPayload(parsed: Record<string, unknown>): Assessment
  * @return {Promise<AssessmentPayload>} Normalized generated question payload.
  */
 async function generateQuestionStructured(prompt: string): Promise<AssessmentPayload> {
-  const client = getGeminiClient();
+  const client = await getGeminiClient();
   const result = await client.runTurn({
     prompt,
     outputSchema: ASSESSMENT_OUTPUT_SCHEMA,
@@ -148,7 +148,7 @@ async function generateQuestionStructured(prompt: string): Promise<AssessmentPay
  * @return {Promise<AssessmentPayload>} Normalized generated question payload.
  */
 async function generateQuestionFallback(prompt: string): Promise<AssessmentPayload> {
-  const client = getGeminiClient();
+  const client = await getGeminiClient();
   const fallbackPrompt = `${prompt}\n\nJSON 객체 하나만 응답하세요. 마크다운 코드블록은 사용하지 마세요.`;
   const result = await client.runTurn({
     prompt: fallbackPrompt,
