@@ -34,7 +34,6 @@ const CATEGORIES: AssessmentQuestion['category'][] = [
 const DEFAULT_QUESTION = '다음 C 코드의 출력 결과는 무엇인가요?';
 const DEFAULT_HINT = '변수 값과 실행 순서를 한 줄씩 따라가 보세요.';
 const DEFAULT_CODE = 'int x = 5;\\nprintf("%d", x);';
-const MAX_GENERATION_ATTEMPTS = 3;
 
 const ASSESSMENT_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -161,21 +160,6 @@ async function resolveAnswerByExecution(rawCode: string): Promise<string> {
 }
 
 /**
- * Checks whether runtime output contains a human-readable label prefix.
- *
- * @param {string} output - Runtime output text.
- * @return {boolean} `true` when output looks like labeled text (e.g. "Value: 5").
- */
-function hasAnswerLabelPrefix(output: string): boolean {
-  const trimmed = output.trim();
-  if (!trimmed) {
-    return false;
-  }
-
-  return /^[A-Za-z가-힣][A-Za-z가-힣0-9_ ]{0,40}\s*[:=]\s*.+$/.test(trimmed);
-}
-
-/**
  * Generates one question with structured output enabled.
  *
  * @param {string} prompt - Prepared question-generation prompt.
@@ -226,15 +210,23 @@ export async function generateQuestion(
     .replace('{category}', category)
     .replace('{difficulty}', String(difficulty));
 
-  let lastError: unknown = null;
+  try {
+    const data = await generateQuestionStructured(prompt);
+    const verifiedAnswer = await resolveAnswerByExecution(data.code);
 
-  for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt += 1) {
+    return {
+      id: `${category}-${Date.now()}`,
+      category,
+      difficulty,
+      question: data.question,
+      code: data.code,
+      answer: verifiedAnswer,
+      hints: data.hints,
+    };
+  } catch (structuredError) {
     try {
-      const data = await generateQuestionStructured(prompt);
+      const data = await generateQuestionFallback(prompt);
       const verifiedAnswer = await resolveAnswerByExecution(data.code);
-      if (hasAnswerLabelPrefix(verifiedAnswer)) {
-        throw new Error(`라벨형 출력이 감지되어 문제를 재생성합니다: ${verifiedAnswer}`);
-      }
 
       return {
         id: `${category}-${Date.now()}`,
@@ -245,32 +237,12 @@ export async function generateQuestion(
         answer: verifiedAnswer,
         hints: data.hints,
       };
-    } catch (structuredError) {
-      try {
-        const data = await generateQuestionFallback(prompt);
-        const verifiedAnswer = await resolveAnswerByExecution(data.code);
-        if (hasAnswerLabelPrefix(verifiedAnswer)) {
-          throw new Error(`라벨형 출력이 감지되어 문제를 재생성합니다: ${verifiedAnswer}`);
-        }
-
-        return {
-          id: `${category}-${Date.now()}`,
-          category,
-          difficulty,
-          question: data.question,
-          code: data.code,
-          answer: verifiedAnswer,
-          hints: data.hints,
-        };
-      } catch (fallbackError) {
-        lastError = new Error(
-          `attempt=${attempt}; structured=${toErrorMessage(structuredError)}; fallback=${toErrorMessage(fallbackError)}`
-        );
-      }
+    } catch (fallbackError) {
+      throw new Error(
+        `문제 생성 실패: structured=${toErrorMessage(structuredError)}; fallback=${toErrorMessage(fallbackError)}`
+      );
     }
   }
-
-  throw new Error(`문제 생성 실패: ${toErrorMessage(lastError)}`);
 }
 
 /**
