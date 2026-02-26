@@ -7,12 +7,12 @@ import { TabBar } from './components/TabBar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { AssessmentView } from './components/assessment/AssessmentView.js';
 import { hasExistingSession, loadProgress } from './services/storage.js';
-import { getCodexClient } from './services/codex-client.js';
+import { getGeminiClient } from './services/gemini-client.js';
 
 type AppState = 'loading' | 'connecting' | 'assessment' | 'main';
 
 /**
- * Root Ink application component that manages startup, Codex connectivity,
+ * Root Ink application component that manages startup, Gemini connectivity,
  * onboarding assessment flow, and main mode switching.
  *
  * @return {JSX.Element} Rendered root application UI.
@@ -49,21 +49,21 @@ export function App() {
       }
     }
     setAppState('connecting');
-    await connectToCodex();
+    await connectToGemini();
   };
 
   /**
-   * Starts Codex RPC client and transitions to assessment on success.
+   * Starts Gemini client and transitions to assessment on success.
    *
    * @return {Promise<void>} Resolves after connection attempt completes.
    */
-  const connectToCodex = async (): Promise<void> => {
+  const connectToGemini = async (): Promise<void> => {
     try {
-      const client = getCodexClient();
+      const client = getGeminiClient();
       await client.start();
       setAppState('assessment');
     } catch (err) {
-      setConnectionError(err instanceof Error ? err.message : 'Failed to connect Codex');
+      setConnectionError(err instanceof Error ? err.message : 'Failed to connect Gemini');
     }
   };
 
@@ -75,7 +75,7 @@ export function App() {
     if (appState === 'connecting' && connectionError) {
       if (input === 'r') {
         setConnectionError(null);
-        void connectToCodex();
+        void connectToGemini();
       }
       if (input === 's') {
         setAppState('main');
@@ -122,16 +122,16 @@ export function App() {
             <>
               <Text color="red">{connectionError}</Text>
               <Box marginTop={1} flexDirection="column">
-                <Text color="gray">npm install -g @openai/codex</Text>
+                <Text color="gray">Set GEMINI_API_KEY (or GOOGLE_API_KEY)</Text>
               </Box>
               <Box marginTop={1}>
-                <Text color="gray">R: retry | S: start without Codex</Text>
+                <Text color="gray">R: retry | S: start without Gemini</Text>
               </Box>
             </>
           ) : (
             <Box>
               <Text color="cyan"><Spinner type="dots" /></Text>
-              <Text> Connecting to Codex...</Text>
+              <Text> Connecting to Gemini...</Text>
             </Box>
           )}
         </Box>

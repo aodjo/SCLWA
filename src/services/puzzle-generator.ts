@@ -1,4 +1,4 @@
-import { getCodexClient } from './codex-client.js';
+import { getGeminiClient } from './gemini-client.js';
 import type { Puzzle, PuzzleType, SkillLevel } from '../types/index.js';
 
 const PUZZLE_PROMPTS = {
@@ -68,7 +68,7 @@ const DIFFICULTY_BY_LEVEL: Record<SkillLevel, 1 | 2 | 3> = {
 };
 
 /**
- * Generates one puzzle with Codex for the requested type and learner level.
+ * Generates one puzzle with Gemini for the requested type and learner level.
  *
  * @param {PuzzleType} type - Puzzle format to generate.
  * @param {SkillLevel} [skillLevel='beginner'] - Learner level used to pick difficulty and topics.
@@ -89,8 +89,11 @@ export async function generatePuzzle(
     .replace('{topic}', selectedTopic);
 
   try {
-    const client = getCodexClient();
-    const result = await client.runTurn({ prompt });
+    const client = getGeminiClient();
+    const result = await client.runTurn({
+      prompt,
+      timeoutSeconds: 40,
+    });
 
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -112,7 +115,7 @@ export async function generatePuzzle(
       difficulty,
     };
   } catch {
-    throw new Error('퍼즐 생성 실패: Codex 연결을 확인하세요');
+    throw new Error('퍼즐 생성 실패: Gemini 연결을 확인하세요');
   }
 }
 

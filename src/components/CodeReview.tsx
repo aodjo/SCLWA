@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import Spinner from 'ink-spinner';
-import { getCodexClient } from '../services/codex-client.js';
+import { getGeminiClient } from '../services/gemini-client.js';
 
 interface CodeReviewProps {
   code: string;
@@ -40,7 +40,7 @@ export function CodeReview({ code }: CodeReviewProps) {
   });
 
   /**
-   * Requests line-by-line analysis from Codex and stores parsed result.
+   * Requests line-by-line analysis from Gemini and stores parsed result.
    *
    * @return {Promise<void>} Resolves after review state is updated.
    */
@@ -51,9 +51,12 @@ export function CodeReview({ code }: CodeReviewProps) {
     const prompt = `Analyze the following C code and explain each line in Korean.\n\nCode:\n\`\`\`c\n${code}\n\`\`\`\n\nRespond in JSON:\n{\n  "lines": [{"lineNumber": 1, "code": "...", "explanation": "..."}],\n  "overall": "..."\n}`;
 
     try {
-      const client = getCodexClient();
+      const client = getGeminiClient();
       await client.start();
-      const result = await client.runTurn({ prompt });
+      const result = await client.runTurn({
+        prompt,
+        timeoutSeconds: 50,
+      });
 
       const jsonMatch = result.text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -74,7 +77,7 @@ export function CodeReview({ code }: CodeReviewProps) {
       const lines = code.split('\n').map((line, i) => ({
         lineNumber: i + 1,
         code: line,
-        explanation: '(Codex connection required)',
+        explanation: '(Gemini 연결 필요)',
       }));
       setReviewLines(lines);
     } finally {

@@ -3,10 +3,10 @@ import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
 import type { ChatMessage } from '../types/index.js';
-import { getCodexClient } from '../services/codex-client.js';
+import { getGeminiClient } from '../services/gemini-client.js';
 
 /**
- * Renders the tutoring chat panel connected to Codex responses.
+ * Renders the tutoring chat panel connected to Gemini responses.
  *
  * @return {JSX.Element} Chat panel UI.
  */
@@ -23,7 +23,7 @@ export function ChatPanel() {
   const [isLoading, setIsLoading] = useState(false);
 
   /**
-   * Submits one user message and appends Codex reply to chat history.
+   * Submits one user message and appends Gemini reply to chat history.
    *
    * @param {string} value - User input text.
    * @return {Promise<void>} Resolves after response or error message is added.
@@ -44,10 +44,11 @@ export function ChatPanel() {
     setIsLoading(true);
 
     try {
-      const client = getCodexClient();
+      const client = getGeminiClient();
       await client.start();
       const result = await client.runTurn({
         prompt: `You are a C programming tutor. Answer in Korean. User question: ${value}`,
+        timeoutSeconds: 40,
       });
 
       const assistantMessage: ChatMessage = {
@@ -61,7 +62,7 @@ export function ChatPanel() {
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: '(Codex connection required)',
+        content: '(Gemini 연결 필요)',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);

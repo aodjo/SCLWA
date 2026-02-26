@@ -1,4 +1,4 @@
-import { getCodexClient } from './codex-client.js';
+import { getGeminiClient } from './gemini-client.js';
 import type { AssessmentResult, SkillLevel } from '../types/index.js';
 
 export interface AssessmentQuestion {
@@ -130,10 +130,11 @@ function normalizeAssessmentPayload(parsed: Record<string, unknown>): Assessment
  * @return {Promise<AssessmentPayload>} Normalized generated question payload.
  */
 async function generateQuestionStructured(prompt: string): Promise<AssessmentPayload> {
-  const client = getCodexClient();
+  const client = getGeminiClient();
   const result = await client.runTurn({
     prompt,
     outputSchema: ASSESSMENT_OUTPUT_SCHEMA,
+    timeoutSeconds: 40,
   });
 
   const parsed = parseJsonObject(result.text);
@@ -147,16 +148,19 @@ async function generateQuestionStructured(prompt: string): Promise<AssessmentPay
  * @return {Promise<AssessmentPayload>} Normalized generated question payload.
  */
 async function generateQuestionFallback(prompt: string): Promise<AssessmentPayload> {
-  const client = getCodexClient();
+  const client = getGeminiClient();
   const fallbackPrompt = `${prompt}\n\nJSON 객체 하나만 응답하세요. 마크다운 코드블록은 사용하지 마세요.`;
-  const result = await client.runTurn({ prompt: fallbackPrompt });
+  const result = await client.runTurn({
+    prompt: fallbackPrompt,
+    timeoutSeconds: 40,
+  });
 
   const parsed = parseJsonObject(result.text);
   return normalizeAssessmentPayload(parsed);
 }
 
 /**
- * Uses Codex structured output to generate one assessment question for a specific category and difficulty.
+ * Uses Gemini structured output to generate one assessment question for a specific category and difficulty.
  *
  * @param {AssessmentQuestion['category']} category - Topic bucket for the generated question.
  * @param {1 | 2 | 3} difficulty - Difficulty level where 1 is easiest and 3 is hardest.
