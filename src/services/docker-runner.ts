@@ -15,6 +15,16 @@ type DockerLogListener = (line: string) => void;
 const dockerLogListeners = new Set<DockerLogListener>();
 
 /**
+ * Runtime options applied when executing compiled C code.
+ */
+export interface RunCodeOptions {
+  /**
+   * Raw stdin payload provided to the executed program.
+   */
+  input?: string;
+}
+
+/**
  * Subscribes to docker lifecycle logs emitted by runner helpers.
  *
  * @param {DockerLogListener} listener - Log listener callback.
@@ -141,9 +151,10 @@ async function ensureDockerImageReady(): Promise<void> {
  * Compiles and runs C code inside an isolated Docker container.
  *
  * @param {string} code - C source code to compile and execute.
+ * @param {RunCodeOptions} [options] - Optional runtime options such as stdin input.
  * @return {Promise<CompileResult>} Execution result including output or error details.
  */
-export async function runCCode(code: string): Promise<CompileResult> {
+export async function runCCode(code: string, options: RunCodeOptions = {}): Promise<CompileResult> {
   await mkdir(TEMP_DIR, { recursive: true });
 
   const sourceFile = join(TEMP_DIR, 'main.c');
@@ -168,6 +179,7 @@ export async function runCCode(code: string): Promise<CompileResult> {
       'docker',
       [
         'run',
+        '-i',
         '--rm',
         '-v',
         `${TEMP_DIR}:/code`,
@@ -197,6 +209,10 @@ export async function runCCode(code: string): Promise<CompileResult> {
     proc.stderr.on('data', (data) => {
       stderr += data.toString();
     });
+
+    if (proc.stdin) {
+      proc.stdin.end(options.input ?? '');
+    }
 
     proc.on('close', async (codeValue) => {
       try {
@@ -276,9 +292,10 @@ export async function ensureDockerReady(): Promise<void> {
  * Compiles and runs C code locally via `gcc` as a fallback when Docker is unavailable.
  *
  * @param {string} code - C source code to compile and execute.
+ * @param {RunCodeOptions} [options] - Optional runtime options such as stdin input.
  * @return {Promise<CompileResult>} Execution result including output or error details.
  */
-export async function runCCodeLocal(code: string): Promise<CompileResult> {
+export async function runCCodeLocal(code: string, options: RunCodeOptions = {}): Promise<CompileResult> {
   await mkdir(TEMP_DIR, { recursive: true });
 
   const sourceFile = join(TEMP_DIR, 'main.c');
@@ -321,6 +338,10 @@ export async function runCCodeLocal(code: string): Promise<CompileResult> {
       run.stderr.on('data', (data) => {
         stderr += data.toString();
       });
+
+      if (run.stdin) {
+        run.stdin.end(options.input ?? '');
+      }
 
       run.on('close', async (runCode) => {
         try {

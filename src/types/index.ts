@@ -35,8 +35,17 @@ export interface Puzzle {
   blanks?: string[];
   bugLine?: number;
   expectedOutput?: string;
+  testCases?: PuzzleTestCase[];
   hints: string[];
   difficulty: 1 | 2 | 3;
+}
+
+/**
+ * One executable input/output pair used for code challenge grading.
+ */
+export interface PuzzleTestCase {
+  input: string;
+  output: string;
 }
 
 /**
