@@ -11,8 +11,19 @@ import {
   type AssessmentQuestion,
   type AssessmentQuestionType,
 } from '../services/assessment.js';
-import { ensureDockerReady } from '../services/docker-runner.js';
-import { saveAssessment } from '../services/storage.js';
+import { getGeminiClient } from '../services/gemini-client.js';
+import { ensureDockerReady, runCCode } from '../services/docker-runner.js';
+import { generatePuzzle } from '../services/puzzle-generator.js';
+import {
+  clearAllData,
+  loadGeminiApiKey,
+  loadProgress,
+  markPuzzleCompleted,
+  saveAssessment,
+  saveGeminiApiKey,
+  saveProgress,
+} from '../services/storage.js';
+import type { Puzzle, PuzzleType, SkillLevel } from '../types/index.js';
 
 const TOTAL_QUESTIONS = 5;
 const CODING_QUESTION_COUNT = 2;
@@ -27,9 +38,16 @@ const STATIC_ROOTS = [
   normalize(join(__dirname, '../../web')),
 ];
 
-interface EvaluateRequest {
+interface EvaluateAssessmentRequest {
   question: AssessmentQuestion;
   answer?: string;
+  code?: string;
+}
+
+interface PuzzleEvaluateRequest {
+  puzzle: Puzzle;
+  answers?: string[];
+  bugLine?: number;
   code?: string;
 }
 
@@ -130,6 +148,94 @@ function contentTypeFor(extension: string): string {
 }
 
 /**
+ * Converts user snippet to an executable C program if `main` is missing.
+ *
+ * @param {string} rawCode - Raw C source code.
+ * @return {string} Executable C source code.
+ */
+function toExecutableCode(rawCode: string): string {
+  if (/\bmain\s*\(/.test(rawCode)) {
+    return rawCode;
+  }
+  return `#include <stdio.h>\nint main(void) {\n${rawCode}\nreturn 0;\n}`;
+}
+
+/**
+ * Normalizes execution output for stable comparisons.
+ *
+ * @param {string} value - Raw output string.
+ * @return {string} Canonicalized output.
+ */
+function normalizeOutput(value: string): string {
+  return value
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim();
+}
+
+/**
+ * Executes user code across all test cases and returns case-level results.
+ *
+ * @param {string} rawCode - Submitted C source code.
+ * @param {Array<{ input: string; output: string }>} testCases - Test case list.
+ * @return {Promise<{ passed: boolean; details: Array<{ index: number; passed: boolean; input: string; expected: string; actual: string; error?: string }> }>} Aggregated evaluation result.
+ */
+async function evaluateCodeChallenge(
+  rawCode: string,
+  testCases: Array<{ input: string; output: string }>
+): Promise<{
+  passed: boolean;
+  details: Array<{ index: number; passed: boolean; input: string; expected: string; actual: string; error?: string }>;
+}> {
+  const executableCode = toExecutableCode(rawCode);
+  const details: Array<{ index: number; passed: boolean; input: string; expected: string; actual: string; error?: string }> = [];
+
+  for (let index = 0; index < testCases.length; index += 1) {
+    const testCase = testCases[index];
+    const runResult = await runCCode(executableCode, { input: testCase.input || '' });
+
+    if (!runResult.success) {
+      details.push({
+        index: index + 1,
+        passed: false,
+        input: testCase.input || '',
+        expected: testCase.output || '',
+        actual: runResult.error || '',
+        error: runResult.error || 'Execution failed',
+      });
+
+      for (let rest = index + 1; rest < testCases.length; rest += 1) {
+        details.push({
+          index: rest + 1,
+          passed: false,
+          input: testCases[rest].input || '',
+          expected: testCases[rest].output || '',
+          actual: runResult.error || '',
+          error: runResult.error || 'Execution failed',
+        });
+      }
+      return { passed: false, details };
+    }
+
+    const actual = normalizeOutput(runResult.output || '');
+    const expected = normalizeOutput(testCase.output || '');
+    details.push({
+      index: index + 1,
+      passed: actual === expected,
+      input: testCase.input || '',
+      expected: testCase.output || '',
+      actual,
+    });
+  }
+
+  const passed = details.every((detail) => detail.passed);
+  return { passed, details };
+}
+
+/**
  * Serves static asset from configured web roots.
  *
  * @param {string} pathname - Request pathname.
@@ -151,7 +257,7 @@ async function serveStatic(pathname: string, res: ServerResponse): Promise<boole
       res.end(data);
       return true;
     } catch {
-      // try next root
+      // try next static root
     }
   }
 
@@ -167,7 +273,7 @@ async function serveStatic(pathname: string, res: ServerResponse): Promise<boole
 }
 
 /**
- * Handles API routes for web assessment mode.
+ * Handles API routes for the React web platform.
  *
  * @param {IncomingMessage} req - HTTP request object.
  * @param {ServerResponse} res - HTTP response object.
@@ -181,6 +287,140 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
     return true;
   }
 
+  if (url.pathname === '/api/progress' && req.method === 'GET') {
+    const progress = await loadProgress();
+    sendJson(res, 200, { progress });
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/gemini-key' && req.method === 'GET') {
+    const apiKey = await loadGeminiApiKey();
+    sendJson(res, 200, { configured: Boolean(apiKey) });
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/gemini-key' && req.method === 'POST') {
+    const body = await readJsonBody<{ apiKey?: string }>(req);
+    const apiKey = (body.apiKey || '').trim();
+    if (!apiKey) {
+      sendJson(res, 400, { error: 'API 키를 입력하세요.' });
+      return true;
+    }
+    await saveGeminiApiKey(apiKey);
+    sendJson(res, 200, { success: true });
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/reset' && req.method === 'POST') {
+    await clearAllData();
+    sendJson(res, 200, { success: true });
+    return true;
+  }
+
+  if (url.pathname === '/api/tutor/chat' && req.method === 'POST') {
+    const body = await readJsonBody<{ message?: string; code?: string }>(req);
+    const message = (body.message || '').trim();
+    const code = body.code || '';
+
+    if (!message) {
+      sendJson(res, 400, { error: '질문을 입력하세요.' });
+      return true;
+    }
+
+    const client = await getGeminiClient();
+    await client.start();
+    const prompt = `너는 C 언어 튜터다. 한국어로 답변해라.\n\n질문:\n${message}\n\n현재 코드:\n\`\`\`c\n${code}\n\`\`\``;
+    const result = await client.runTurn({ prompt, timeoutSeconds: 45 });
+    sendJson(res, 200, { text: result.text || '' });
+    return true;
+  }
+
+  if (url.pathname === '/api/review/analyze' && req.method === 'POST') {
+    const body = await readJsonBody<{ code?: string }>(req);
+    const code = body.code || '';
+    if (!code.trim()) {
+      sendJson(res, 400, { error: '코드를 입력하세요.' });
+      return true;
+    }
+
+    const client = await getGeminiClient();
+    await client.start();
+    const prompt = `다음 C 코드를 한국어로 코드리뷰해라.\n\n요구사항:\n- 잠재 버그와 런타임 위험 우선\n- 라인 번호 기반으로 지적\n- 개선안을 간결히 제시\n- 마지막에 전체 총평\n\n코드:\n\`\`\`c\n${code}\n\`\`\``;
+    const result = await client.runTurn({ prompt, timeoutSeconds: 50 });
+    sendJson(res, 200, { text: result.text || '' });
+    return true;
+  }
+
+  if (url.pathname === '/api/puzzle/generate' && req.method === 'POST') {
+    const body = await readJsonBody<{ type?: PuzzleType; skillLevel?: SkillLevel; topic?: string }>(req);
+    const type = body.type || 'fill-blank';
+    const skillLevel = body.skillLevel || 'beginner';
+    const topic = body.topic;
+
+    const puzzle = await generatePuzzle(type, skillLevel, topic);
+    sendJson(res, 200, { puzzle });
+    return true;
+  }
+
+  if (url.pathname === '/api/puzzle/evaluate' && req.method === 'POST') {
+    const body = await readJsonBody<PuzzleEvaluateRequest>(req);
+    const puzzle = body.puzzle;
+
+    if (!puzzle || !puzzle.type) {
+      sendJson(res, 400, { error: '유효한 퍼즐 정보가 필요합니다.' });
+      return true;
+    }
+
+    if (puzzle.type === 'fill-blank') {
+      const expected = puzzle.blanks || [];
+      const submitted = Array.isArray(body.answers) ? body.answers : [];
+      const passed = expected.length > 0
+        ? expected.every((blank, index) => (submitted[index] || '').trim().toLowerCase() === blank.toLowerCase())
+        : false;
+      if (passed) {
+        await markPuzzleCompleted(puzzle.id);
+      }
+      sendJson(res, 200, {
+        passed,
+        expected,
+        submitted,
+      });
+      return true;
+    }
+
+    if (puzzle.type === 'bug-finder') {
+      const selectedLine = Number(body.bugLine || 0);
+      const expectedLine = Number(puzzle.bugLine || 0);
+      const passed = selectedLine > 0 && selectedLine === expectedLine;
+      if (passed) {
+        await markPuzzleCompleted(puzzle.id);
+      }
+      sendJson(res, 200, {
+        passed,
+        selectedLine,
+        expectedLine,
+      });
+      return true;
+    }
+
+    const submittedCode = body.code || '';
+    const testCases = (puzzle.testCases || []).map((testCase) => ({
+      input: testCase.input || '',
+      output: testCase.output || '',
+    }));
+    if (testCases.length === 0) {
+      sendJson(res, 400, { error: '테스트 케이스가 없습니다.' });
+      return true;
+    }
+
+    const evaluation = await evaluateCodeChallenge(submittedCode, testCases);
+    if (evaluation.passed) {
+      await markPuzzleCompleted(puzzle.id);
+    }
+    sendJson(res, 200, evaluation);
+    return true;
+  }
+
   if (url.pathname === '/api/assessment/question' && req.method === 'POST') {
     const body = await readJsonBody<{ index?: number }>(req);
     const index = typeof body.index === 'number' ? body.index : 0;
@@ -191,7 +431,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
   }
 
   if (url.pathname === '/api/assessment/evaluate' && req.method === 'POST') {
-    const body = await readJsonBody<EvaluateRequest>(req);
+    const body = await readJsonBody<EvaluateAssessmentRequest>(req);
     const question = body.question;
 
     if (!question || typeof question !== 'object' || typeof question.type !== 'string') {
@@ -237,6 +477,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
     const answers = Array.isArray(body.answers) ? body.answers : [];
     const result = calculateAssessmentResult(questions, answers);
     await saveAssessment(result);
+    const progress = await loadProgress();
+    progress.assessment = result;
+    await saveProgress(progress);
     sendJson(res, 200, { result });
     return true;
   }
@@ -273,9 +516,8 @@ function startWebServer(): void {
     process.stdout.write(`Web mode: http://${HOST}:${PORT}\n`);
   });
 
-  // Warm up Docker in the background so first grading call is faster.
   void ensureDockerReady().catch(() => {
-    // Ignore warmup failures; requests will still surface runtime errors.
+    // Background warmup only.
   });
 }
 

@@ -1,29 +1,33 @@
 # SCLWA
 
-React + Tailwind 기반 웹 플랫폼과 기존 CLI 학습 환경을 함께 제공합니다.
+SCLWA is now fully migrated to a web platform built with React + Tailwind CSS.
 
-## 개발 실행
+## Features (Web)
+
+- Assessment (output + coding problems)
+- Puzzle mode (fill blank, bug finder, code challenge)
+- Tutoring chat (Gemini)
+- Code review (Gemini)
+- Settings (Gemini API key, progress reset)
+
+## Run
 
 ```bash
 npm install
-```
-
-### 웹 플랫폼 (권장)
-
-```bash
 npm run web:dev
 ```
 
-- 프론트엔드: `http://127.0.0.1:5173`
-- API 서버: `http://127.0.0.1:5174`
+- Frontend: `http://127.0.0.1:5173`
+- API: `http://127.0.0.1:5174`
 
-### 웹 프론트엔드 빌드
+## Build
 
 ```bash
+npm run build
 npm run web:build
 ```
 
-### 기존 CLI 모드
+## Legacy CLI
 
 ```bash
 npm run dev
