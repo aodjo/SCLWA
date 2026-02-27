@@ -3,27 +3,40 @@ import { ensureDockerReady, runCCode } from './docker-runner.js';
 import { normalizeGeneratedCode } from './code-format.js';
 import type { AssessmentResult, SkillLevel } from '../types/index.js';
 
+export type AssessmentCategory = 'basics' | 'arrays' | 'pointers' | 'structs' | 'functions';
+export type AssessmentQuestionType = 'output' | 'coding';
+
+export interface AssessmentTestCase {
+  input: string;
+  output: string;
+}
+
 export interface AssessmentQuestion {
   id: string;
-  category: 'basics' | 'arrays' | 'pointers' | 'structs' | 'functions';
+  type: AssessmentQuestionType;
+  category: AssessmentCategory;
   difficulty: 1 | 2 | 3;
   question: string;
   code?: string;
   answer: string;
+  testCases?: AssessmentTestCase[];
   hints: string[];
 }
 
-const ASSESSMENT_PROMPT = `C 언어 진단 평가용 문제를 1개 생성해 주세요.
+export interface CodingCaseResult extends AssessmentTestCase {
+  actual: string;
+  passed: boolean;
+  error?: string;
+}
 
-조건:
-- 카테고리: {category}
-- 난이도: {difficulty} (1=쉬움, 2=보통, 3=어려움)
-- 코드 실행 결과/동작을 추론하는 문제
-- 문제 설명과 힌트는 한국어로 작성
-- 출력 코드는 라벨 없이 값만 출력 (예: printf("%d", x);). "Value:", "Result=" 같은 접두 라벨 금지
-- 응답은 반드시 출력 스키마를 만족`;
+export interface CodingEvaluationResult {
+  isCorrect: boolean;
+  passCount: number;
+  totalCount: number;
+  cases: CodingCaseResult[];
+}
 
-const CATEGORIES: AssessmentQuestion['category'][] = [
+const CATEGORIES: AssessmentCategory[] = [
   'basics',
   'arrays',
   'pointers',
@@ -31,46 +44,111 @@ const CATEGORIES: AssessmentQuestion['category'][] = [
   'structs',
 ];
 
-const DEFAULT_QUESTION = '다음 C 코드의 출력 결과는 무엇인가요?';
-const DEFAULT_HINT = '변수 값과 실행 순서를 한 줄씩 따라가 보세요.';
-const DEFAULT_CODE = 'int x = 5;\\nprintf("%d", x);';
+const OUTPUT_QUESTION_PROMPT = `Create one C language skill-assessment question in Korean.
 
-const ASSESSMENT_OUTPUT_SCHEMA: Record<string, unknown> = {
+Requirements:
+- Category: {category}
+- Difficulty: {difficulty} (1 easy, 2 medium, 3 hard)
+- Type: output prediction
+- The learner must read code and answer the exact stdout result.
+- User-facing text (question/hints) must be Korean.
+- Return JSON only, no markdown.
+
+Output JSON shape:
+{
+  "question": "문제 설명",
+  "code": "#include <stdio.h>\\nint main(void) { ... }",
+  "hints": ["힌트1", "힌트2"]
+}`;
+
+const CODING_QUESTION_PROMPT = `Create one C language coding assessment question in Korean.
+
+Requirements:
+- Category: {category}
+- Difficulty: {difficulty} (1 easy, 2 medium, 3 hard)
+- Type: direct coding
+- The learner must write code and pass test cases.
+- User-facing text (question/hints) must be Korean.
+- testInputs must contain at least 3 different stdin samples.
+- referenceSolution must be complete executable C code.
+- Return JSON only, no markdown.
+
+Output JSON shape:
+{
+  "question": "문제 설명",
+  "starterCode": "#include <stdio.h>\\nint main(void) {\\n    return 0;\\n}",
+  "referenceSolution": "#include <stdio.h>\\nint main(void) { ... }",
+  "testInputs": ["1 2\\n", "10 20\\n", "7 8\\n"],
+  "hints": ["힌트1", "힌트2"]
+}`;
+
+const OUTPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
     question: { type: 'string' },
     code: { type: 'string' },
-    answer: { type: 'string' },
     hints: {
       type: 'array',
       items: { type: 'string' },
     },
   },
-  required: ['question', 'code', 'answer', 'hints'],
+  required: ['question', 'code', 'hints'],
 };
 
-interface AssessmentPayload {
+const CODING_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    question: { type: 'string' },
+    starterCode: { type: 'string' },
+    referenceSolution: { type: 'string' },
+    testInputs: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    hints: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+  },
+  required: ['question', 'starterCode', 'referenceSolution', 'testInputs', 'hints'],
+};
+
+const DEFAULT_OUTPUT_QUESTION = '다음 C 코드의 실행 결과는 무엇인가요?';
+const DEFAULT_CODING_QUESTION = '문제를 읽고 C 코드를 작성하여 모든 테스트 케이스를 통과하세요.';
+const DEFAULT_HINT = '입력 형식과 출력 형식을 먼저 정리한 다음 구현하세요.';
+const DEFAULT_OUTPUT_CODE = '#include <stdio.h>\nint main(void) {\n    int x = 5;\n    printf("%d\\n", x);\n    return 0;\n}';
+const DEFAULT_STARTER_CODE = '#include <stdio.h>\n\nint main(void) {\n    return 0;\n}';
+const PASS_TOKEN = '__PASS__';
+
+interface OutputPayload {
   question: string;
   code: string;
-  answer: string;
+  hints: string[];
+}
+
+interface CodingPayload {
+  question: string;
+  starterCode: string;
+  referenceSolution: string;
+  testInputs: string[];
   hints: string[];
 }
 
 /**
  * Converts unknown error values into readable text.
  *
- * @param {unknown} error - Error-like value.
- * @return {string} Human-readable error message.
+ * @param {unknown} error - Unknown error object.
+ * @return {string} Readable error message.
  */
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 /**
- * Parses JSON object from raw model text.
+ * Parses one JSON object from raw model text.
  *
- * @param {string} rawText - Model text output.
- * @return {Record<string, unknown>} Parsed JSON object.
+ * @param {string} rawText - Raw model output.
+ * @return {Record<string, unknown>} Parsed object.
  */
 function parseJsonObject(rawText: string): Record<string, unknown> {
   try {
@@ -79,58 +157,57 @@ function parseJsonObject(rawText: string): Record<string, unknown> {
       return parsed as Record<string, unknown>;
     }
   } catch {
-    // fall through to block extraction
+    // fallback extraction below
   }
 
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('모델 출력에서 JSON 객체를 찾을 수 없습니다.');
+    throw new Error('Model output did not include a JSON object.');
   }
 
   const parsed = JSON.parse(jsonMatch[0]) as unknown;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('파싱된 JSON이 객체 형태가 아닙니다.');
+    throw new Error('Parsed JSON value was not an object.');
   }
-
   return parsed as Record<string, unknown>;
 }
 
 /**
- * Normalizes parsed model JSON to assessment payload shape.
+ * Returns a non-empty string value or fallback text.
  *
- * @param {Record<string, unknown>} parsed - Parsed JSON object.
- * @return {AssessmentPayload} Normalized assessment payload.
+ * @param {unknown} value - Unknown candidate value.
+ * @param {string} fallback - Fallback text.
+ * @return {string} Normalized string.
  */
-function normalizeAssessmentPayload(parsed: Record<string, unknown>): AssessmentPayload {
-  const question =
-    typeof parsed.question === 'string' && parsed.question.trim().length > 0
-      ? parsed.question
-      : DEFAULT_QUESTION;
-
-  const code =
-    typeof parsed.code === 'string' && parsed.code.trim().length > 0
-      ? parsed.code
-      : DEFAULT_CODE;
-
-  const answer = typeof parsed.answer === 'string' ? parsed.answer : '';
-
-  const hints = Array.isArray(parsed.hints)
-    ? parsed.hints.filter((hint): hint is string => typeof hint === 'string' && hint.trim().length > 0)
-    : [];
-
-  return {
-    question,
-    code,
-    answer,
-    hints: hints.length > 0 ? hints : [DEFAULT_HINT],
-  };
+function normalizeString(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  return value.trim().length > 0 ? value : fallback;
 }
 
 /**
- * Wraps generated code into an executable C program when `main` is missing.
+ * Normalizes raw hint values into a non-empty hint list.
  *
- * @param {string} rawCode - Generated C code text.
- * @return {string} Executable C source code.
+ * @param {unknown} value - Raw hints value.
+ * @return {string[]} Normalized hints.
+ */
+function normalizeHints(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [DEFAULT_HINT];
+  }
+
+  const hints = value.filter(
+    (hint): hint is string => typeof hint === 'string' && hint.trim().length > 0
+  );
+  return hints.length > 0 ? hints : [DEFAULT_HINT];
+}
+
+/**
+ * Converts generated code into executable form by injecting `main` when missing.
+ *
+ * @param {string} rawCode - Raw generated code.
+ * @return {string} Executable C program text.
  */
 function toExecutableCode(rawCode: string): string {
   const normalized = normalizeGeneratedCode(rawCode);
@@ -138,119 +215,207 @@ function toExecutableCode(rawCode: string): string {
     return normalized;
   }
 
-  return `#include <stdio.h>\nint main() {\n${normalized}\nreturn 0;\n}`;
+  return `#include <stdio.h>\nint main(void) {\n${normalized}\nreturn 0;\n}`;
 }
 
 /**
- * Executes generated code in Docker and returns runtime output as canonical answer.
+ * Normalizes output text so comparison is resilient to newline style and trailing spaces.
  *
- * @param {string} rawCode - Generated code from model output.
- * @return {Promise<string>} Runtime output used for grading.
+ * @param {string} value - Raw execution output.
+ * @return {string} Canonicalized output text.
  */
-async function resolveAnswerByExecution(rawCode: string): Promise<string> {
-  await ensureDockerReady();
+function normalizeOutput(value: string): string {
+  return value
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim();
+}
+
+/**
+ * Runs one code snippet with optional stdin input and returns normalized stdout.
+ *
+ * @param {string} rawCode - C code to execute.
+ * @param {string} [input=''] - Stdin payload.
+ * @return {Promise<string>} Normalized stdout text.
+ */
+async function executeCode(rawCode: string, input = ''): Promise<string> {
   const executableCode = toExecutableCode(rawCode);
-  const execution = await runCCode(executableCode);
-
+  const execution = await runCCode(executableCode, { input });
   if (!execution.success) {
-    throw new Error(`코드 실행 검증 실패: ${execution.error || 'unknown error'}`);
+    throw new Error(execution.error || 'Code execution failed.');
   }
-
-  return (execution.output || '').trim();
+  return normalizeOutput(execution.output || '');
 }
 
 /**
- * Generates one question with structured output enabled.
+ * Calls Gemini with structured output and JSON-text fallback.
  *
- * @param {string} prompt - Prepared question-generation prompt.
- * @return {Promise<AssessmentPayload>} Normalized generated question payload.
+ * @param {string} prompt - Model prompt.
+ * @param {Record<string, unknown>} schema - Structured output schema.
+ * @return {Promise<Record<string, unknown>>} Parsed JSON payload.
  */
-async function generateQuestionStructured(prompt: string): Promise<AssessmentPayload> {
+async function generatePayload(
+  prompt: string,
+  schema: Record<string, unknown>
+): Promise<Record<string, unknown>> {
   const client = await getGeminiClient();
-  const result = await client.runTurn({
-    prompt,
-    outputSchema: ASSESSMENT_OUTPUT_SCHEMA,
-    timeoutSeconds: 40,
-  });
-
-  const parsed = parseJsonObject(result.text);
-  return normalizeAssessmentPayload(parsed);
-}
-
-/**
- * Generates one question with text JSON fallback mode.
- *
- * @param {string} prompt - Prepared question-generation prompt.
- * @return {Promise<AssessmentPayload>} Normalized generated question payload.
- */
-async function generateQuestionFallback(prompt: string): Promise<AssessmentPayload> {
-  const client = await getGeminiClient();
-  const fallbackPrompt = `${prompt}\n\nJSON 객체 하나만 응답하세요. 마크다운 코드블록은 사용하지 마세요.`;
-  const result = await client.runTurn({
-    prompt: fallbackPrompt,
-    timeoutSeconds: 40,
-  });
-
-  const parsed = parseJsonObject(result.text);
-  return normalizeAssessmentPayload(parsed);
-}
-
-/**
- * Uses Gemini structured output to generate one assessment question for a specific category and difficulty.
- *
- * @param {AssessmentQuestion['category']} category - Topic bucket for the generated question.
- * @param {1 | 2 | 3} difficulty - Difficulty level where 1 is easiest and 3 is hardest.
- * @return {Promise<AssessmentQuestion>} Generated assessment question with answer and hints.
- */
-export async function generateQuestion(
-  category: AssessmentQuestion['category'],
-  difficulty: 1 | 2 | 3
-): Promise<AssessmentQuestion> {
-  const prompt = ASSESSMENT_PROMPT
-    .replace('{category}', category)
-    .replace('{difficulty}', String(difficulty));
 
   try {
-    const data = await generateQuestionStructured(prompt);
-    const verifiedAnswer = await resolveAnswerByExecution(data.code);
-
-    return {
-      id: `${category}-${Date.now()}`,
-      category,
-      difficulty,
-      question: data.question,
-      code: data.code,
-      answer: verifiedAnswer,
-      hints: data.hints,
-    };
+    const structured = await client.runTurn({
+      prompt,
+      outputSchema: schema,
+      timeoutSeconds: 45,
+    });
+    return parseJsonObject(structured.text);
   } catch (structuredError) {
-    try {
-      const data = await generateQuestionFallback(prompt);
-      const verifiedAnswer = await resolveAnswerByExecution(data.code);
+    const fallbackPrompt = `${prompt}\n\nReturn one JSON object only. Do not use markdown code fences.`;
+    const fallback = await client.runTurn({
+      prompt: fallbackPrompt,
+      timeoutSeconds: 45,
+    });
 
-      return {
-        id: `${category}-${Date.now()}`,
-        category,
-        difficulty,
-        question: data.question,
-        code: data.code,
-        answer: verifiedAnswer,
-        hints: data.hints,
-      };
+    try {
+      return parseJsonObject(fallback.text);
     } catch (fallbackError) {
       throw new Error(
-        `문제 생성 실패: structured=${toErrorMessage(structuredError)}; fallback=${toErrorMessage(fallbackError)}`
+        `Generation failed: structured=${toErrorMessage(structuredError)}; fallback=${toErrorMessage(fallbackError)}`
       );
     }
   }
 }
 
 /**
- * Generates a sequence of assessment questions and optionally reports progress.
+ * Converts parsed output-question payload to normalized shape.
+ *
+ * @param {Record<string, unknown>} parsed - Parsed model JSON.
+ * @return {OutputPayload} Normalized output-question payload.
+ */
+function normalizeOutputPayload(parsed: Record<string, unknown>): OutputPayload {
+  return {
+    question: normalizeString(parsed.question, DEFAULT_OUTPUT_QUESTION),
+    code: normalizeString(parsed.code, DEFAULT_OUTPUT_CODE),
+    hints: normalizeHints(parsed.hints),
+  };
+}
+
+/**
+ * Converts parsed coding-question payload to normalized shape.
+ *
+ * @param {Record<string, unknown>} parsed - Parsed model JSON.
+ * @return {CodingPayload} Normalized coding-question payload.
+ */
+function normalizeCodingPayload(parsed: Record<string, unknown>): CodingPayload {
+  const rawInputs = Array.isArray(parsed.testInputs) ? parsed.testInputs : [];
+  const testInputs = rawInputs
+    .filter((input): input is string => typeof input === 'string' && input.length > 0)
+    .slice(0, 6);
+
+  return {
+    question: normalizeString(parsed.question, DEFAULT_CODING_QUESTION),
+    starterCode: normalizeString(parsed.starterCode, DEFAULT_STARTER_CODE),
+    referenceSolution: normalizeString(parsed.referenceSolution, DEFAULT_STARTER_CODE),
+    testInputs: testInputs.length >= 3 ? testInputs : ['1 2\n', '10 20\n', '7 8\n'],
+    hints: normalizeHints(parsed.hints),
+  };
+}
+
+/**
+ * Builds runnable test cases by executing the reference solution for each input.
+ *
+ * @param {string} referenceSolution - Reference C solution from model output.
+ * @param {string[]} testInputs - Raw stdin samples.
+ * @return {Promise<AssessmentTestCase[]>} Test cases with verified expected outputs.
+ */
+async function buildVerifiedTestCases(
+  referenceSolution: string,
+  testInputs: string[]
+): Promise<AssessmentTestCase[]> {
+  await ensureDockerReady();
+
+  const cases: AssessmentTestCase[] = [];
+  for (const input of testInputs) {
+    const output = await executeCode(referenceSolution, input);
+    cases.push({ input, output });
+  }
+  return cases;
+}
+
+/**
+ * Generates one assessment question for the selected category, difficulty, and type.
+ *
+ * @param {AssessmentCategory} category - Topic category for this question.
+ * @param {1 | 2 | 3} difficulty - Difficulty level (1 easy, 3 hard).
+ * @param {AssessmentQuestionType} [type='output'] - Question type (`output` or `coding`).
+ * @return {Promise<AssessmentQuestion>} Generated and execution-verified question.
+ */
+export async function generateQuestion(
+  category: AssessmentCategory,
+  difficulty: 1 | 2 | 3,
+  type: AssessmentQuestionType = 'output'
+): Promise<AssessmentQuestion> {
+  if (type === 'coding') {
+    const prompt = CODING_QUESTION_PROMPT
+      .replace('{category}', category)
+      .replace('{difficulty}', String(difficulty));
+
+    try {
+      const parsed = await generatePayload(prompt, CODING_SCHEMA);
+      const normalized = normalizeCodingPayload(parsed);
+      const testCases = await buildVerifiedTestCases(
+        normalized.referenceSolution,
+        normalized.testInputs
+      );
+
+      return {
+        id: `${category}-${Date.now()}`,
+        type: 'coding',
+        category,
+        difficulty,
+        question: normalized.question,
+        code: normalized.starterCode,
+        answer: PASS_TOKEN,
+        testCases,
+        hints: normalized.hints,
+      };
+    } catch (error) {
+      throw new Error(`코드 작성형 문제 생성 실패: ${toErrorMessage(error)}`);
+    }
+  }
+
+  const prompt = OUTPUT_QUESTION_PROMPT
+    .replace('{category}', category)
+    .replace('{difficulty}', String(difficulty));
+
+  try {
+    const parsed = await generatePayload(prompt, OUTPUT_SCHEMA);
+    const normalized = normalizeOutputPayload(parsed);
+    await ensureDockerReady();
+    const answer = await executeCode(normalized.code);
+
+    return {
+      id: `${category}-${Date.now()}`,
+      type: 'output',
+      category,
+      difficulty,
+      question: normalized.question,
+      code: normalized.code,
+      answer,
+      hints: normalized.hints,
+    };
+  } catch (error) {
+    throw new Error(`출력 예측형 문제 생성 실패: ${toErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Generates a batch of questions with mixed types for onboarding assessment.
  *
  * @param {number} [count=5] - Number of questions to generate.
- * @param {(current: number, total: number) => void} [onProgress] - Optional per-question progress callback.
- * @return {Promise<AssessmentQuestion[]>} Generated assessment question list.
+ * @param {(current: number, total: number) => void} [onProgress] - Optional progress callback.
+ * @return {Promise<AssessmentQuestion[]>} Generated question list.
  */
 export async function getAssessmentQuestions(
   count = 5,
@@ -259,13 +424,13 @@ export async function getAssessmentQuestions(
   const questions: AssessmentQuestion[] = [];
   const selectedCategories = CATEGORIES.slice(0, count);
 
-  for (let i = 0; i < selectedCategories.length; i++) {
+  for (let i = 0; i < selectedCategories.length; i += 1) {
     const category = selectedCategories[i];
     const difficulty = Math.min(Math.floor(i / 2) + 1, 3) as 1 | 2 | 3;
-
+    const type: AssessmentQuestionType = i >= Math.max(1, count - 2) ? 'coding' : 'output';
     onProgress?.(i + 1, count);
 
-    const question = await generateQuestion(category, difficulty);
+    const question = await generateQuestion(category, difficulty, type);
     questions.push(question);
   }
 
@@ -273,11 +438,11 @@ export async function getAssessmentQuestions(
 }
 
 /**
- * Validates a user answer against the expected answer for one question.
+ * Compares a submitted answer to the canonical answer token.
  *
- * @param {AssessmentQuestion} question - Question containing canonical answer text.
- * @param {string} userAnswer - Raw answer submitted by the learner.
- * @return {boolean} `true` if normalized answers match.
+ * @param {AssessmentQuestion} question - Question with canonical answer text.
+ * @param {string} userAnswer - Submitted answer token.
+ * @return {boolean} `true` when normalized values match.
  */
 export function checkAnswer(question: AssessmentQuestion, userAnswer: string): boolean {
   const normalized = userAnswer.trim().toLowerCase();
@@ -286,10 +451,76 @@ export function checkAnswer(question: AssessmentQuestion, userAnswer: string): b
 }
 
 /**
- * Calculates category scores, inferred skill level, and recommended follow-up topics.
+ * Executes a coding submission against the question test cases.
  *
- * @param {AssessmentQuestion[]} questions - Ordered list of asked questions.
- * @param {string[]} answers - Ordered list of submitted answers.
+ * @param {AssessmentQuestion} question - Coding question containing test cases.
+ * @param {string} userCode - Submitted C source code.
+ * @return {Promise<CodingEvaluationResult>} Detailed pass/fail result per test case.
+ */
+export async function evaluateCodingSubmission(
+  question: AssessmentQuestion,
+  userCode: string
+): Promise<CodingEvaluationResult> {
+  if (question.type !== 'coding') {
+    throw new Error('evaluateCodingSubmission can only be used for coding questions.');
+  }
+
+  const testCases = question.testCases || [];
+  if (testCases.length === 0) {
+    throw new Error('No test cases are available for this coding question.');
+  }
+
+  await ensureDockerReady();
+  const executableCode = toExecutableCode(userCode);
+
+  const cases: CodingCaseResult[] = [];
+  for (let i = 0; i < testCases.length; i += 1) {
+    const testCase = testCases[i];
+    const execution = await runCCode(executableCode, { input: testCase.input });
+
+    if (!execution.success) {
+      const errorText = execution.error || 'Execution failed';
+      cases.push({
+        ...testCase,
+        actual: errorText,
+        passed: false,
+        error: errorText,
+      });
+
+      for (let j = i + 1; j < testCases.length; j += 1) {
+        cases.push({
+          ...testCases[j],
+          actual: errorText,
+          passed: false,
+          error: errorText,
+        });
+      }
+      break;
+    }
+
+    const actual = normalizeOutput(execution.output || '');
+    const expected = normalizeOutput(testCase.output);
+    cases.push({
+      ...testCase,
+      actual,
+      passed: actual === expected,
+    });
+  }
+
+  const passCount = cases.filter((item) => item.passed).length;
+  return {
+    isCorrect: passCount === testCases.length,
+    passCount,
+    totalCount: testCases.length,
+    cases,
+  };
+}
+
+/**
+ * Calculates category scores, inferred skill level, and recommended topics.
+ *
+ * @param {AssessmentQuestion[]} questions - Asked questions in order.
+ * @param {string[]} answers - Submitted answer tokens in order.
  * @return {AssessmentResult} Computed assessment summary.
  */
 export function calculateAssessmentResult(
@@ -312,7 +543,7 @@ export function calculateAssessmentResult(
   };
 
   questions.forEach((question, index) => {
-    categoryCounts[question.category]++;
+    categoryCounts[question.category] += 1;
     if (checkAnswer(question, answers[index] || '')) {
       scores[question.category] += 100;
     }

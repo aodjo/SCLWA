@@ -6,7 +6,9 @@ import {
   generateQuestion,
   calculateAssessmentResult,
   checkAnswer,
+  evaluateCodingSubmission,
   type AssessmentQuestion,
+  type AssessmentQuestionType,
 } from '../../services/assessment.js';
 import { saveAssessment } from '../../services/storage.js';
 import type { AssessmentResult } from '../../types/index.js';
@@ -18,6 +20,9 @@ interface AssessmentViewProps {
   onComplete: (result: AssessmentResult) => void;
 }
 
+const TOTAL_QUESTIONS = 5;
+const CODING_QUESTION_COUNT = 2;
+
 const CATEGORIES: AssessmentQuestion['category'][] = [
   'basics',
   'arrays',
@@ -25,6 +30,7 @@ const CATEGORIES: AssessmentQuestion['category'][] = [
   'functions',
   'structs',
 ];
+
 const CATEGORY_LABELS: Record<AssessmentQuestion['category'], string> = {
   basics: '기초',
   arrays: '배열',
@@ -33,16 +39,29 @@ const CATEGORY_LABELS: Record<AssessmentQuestion['category'], string> = {
   structs: '구조체',
 };
 
-const TOTAL_QUESTIONS = 5;
 type Phase = 'generating' | 'answering' | 'result';
+
 interface SubmissionFeedback {
   isCorrect: boolean;
   submittedAnswer: string;
   expectedAnswer: string;
+  details?: string[];
 }
 
 /**
- * Renders one syntax-highlighted code line with line number.
+ * Returns one-line safe preview text for values that may contain line breaks.
+ *
+ * @param {string} value - Raw text value.
+ * @return {string} Escaped preview text.
+ */
+function toPreview(value: string): string {
+  const normalized = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const escaped = normalized.replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+  return escaped.length > 0 ? escaped : '(empty)';
+}
+
+/**
+ * Renders one syntax-highlighted line with line number.
  *
  * @param {{ line: string; lineNumber: number }} props - Line rendering props.
  * @param {string} props.line - Raw source line.
@@ -57,6 +76,16 @@ function AssessmentCodeLine({ line, lineNumber }: { line: string; lineNumber: nu
       <HighlightedLine line={line.length > 0 ? line : ' '} />
     </Box>
   );
+}
+
+/**
+ * Determines question type by index so the end of assessment includes coding tasks.
+ *
+ * @param {number} index - Zero-based question index.
+ * @return {AssessmentQuestionType} Selected question type.
+ */
+function getQuestionType(index: number): AssessmentQuestionType {
+  return index >= TOTAL_QUESTIONS - CODING_QUESTION_COUNT ? 'coding' : 'output';
 }
 
 /**
@@ -77,16 +106,19 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<SubmissionFeedback | null>(null);
+  const [codingLines, setCodingLines] = useState<string[]>(['']);
+  const [currentCodingLine, setCurrentCodingLine] = useState(0);
+  const [isCheckingCode, setIsCheckingCode] = useState(false);
 
   useEffect(() => {
     void generateNextQuestion(0);
   }, []);
 
   /**
-   * Generates the next assessment question by index.
+   * Generates one new question at the requested index.
    *
    * @param {number} index - Zero-based question index.
-   * @return {Promise<void>} Resolves after question or error state is updated.
+   * @return {Promise<void>} Resolves after state is updated.
    */
   const generateNextQuestion = async (index: number): Promise<void> => {
     setPhase('generating');
@@ -95,10 +127,15 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
 
     const category = CATEGORIES[index % CATEGORIES.length];
     const difficulty = Math.min(Math.floor(index / 2) + 1, 3) as 1 | 2 | 3;
+    const questionType = getQuestionType(index);
 
     try {
-      const question = await generateQuestion(category, difficulty);
+      const question = await generateQuestion(category, difficulty, questionType);
       setCurrentQuestion(question);
+      setInput('');
+      setCodingLines(['']);
+      setCurrentCodingLine(0);
+      setIsCheckingCode(false);
       setFeedback(null);
       setPhase('answering');
     } catch (err) {
@@ -107,38 +144,33 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
   };
 
   useInput((char) => {
-    if (char === 'h' && phase === 'answering') {
-      setShowHint(!showHint);
+    if (char.toLowerCase() === 'h' && phase === 'answering') {
+      setShowHint((value) => !value);
     }
-    if (char === 'r' && error) {
+    if (char.toLowerCase() === 'r' && error) {
       void generateNextQuestion(currentIndex);
     }
   });
 
   /**
-   * Stores current answer and moves to next question or result view.
+   * Saves submission result, advances question index, or finishes assessment.
    *
-   * @param {string} value - User-submitted answer text.
-   * @return {Promise<void>} Resolves after assessment state transition.
+   * @param {AssessmentQuestion} question - Question that was just graded.
+   * @param {string} answerToken - Stored answer token used for score calculation.
+   * @param {SubmissionFeedback} submissionFeedback - Feedback shown before next generation.
+   * @return {Promise<void>} Resolves after next state transition.
    */
-  const handleSubmit = async (value: string): Promise<void> => {
-    if (!currentQuestion) {
-      return;
-    }
+  const finalizeSubmission = async (
+    question: AssessmentQuestion,
+    answerToken: string,
+    submissionFeedback: SubmissionFeedback
+  ): Promise<void> => {
+    setFeedback(submissionFeedback);
 
-    const normalizedAnswer = value.trim();
-    const isCorrect = checkAnswer(currentQuestion, value);
-    setFeedback({
-      isCorrect,
-      submittedAnswer: normalizedAnswer,
-      expectedAnswer: currentQuestion.answer,
-    });
-
-    const newQuestions = [...questions, currentQuestion];
-    const newAnswers = [...answers, value];
+    const newQuestions = [...questions, question];
+    const newAnswers = [...answers, answerToken];
     setQuestions(newQuestions);
     setAnswers(newAnswers);
-    setInput('');
 
     if (currentIndex + 1 >= TOTAL_QUESTIONS) {
       const assessmentResult = calculateAssessmentResult(newQuestions, newAnswers);
@@ -153,6 +185,77 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
     await generateNextQuestion(nextIndex);
   };
 
+  /**
+   * Handles submission for output-prediction question.
+   *
+   * @param {string} value - User-submitted output text.
+   * @return {Promise<void>} Resolves after grading and transition.
+   */
+  const handleOutputSubmit = async (value: string): Promise<void> => {
+    if (!currentQuestion || currentQuestion.type !== 'output') {
+      return;
+    }
+
+    const normalizedAnswer = value.trim();
+    const isCorrect = checkAnswer(currentQuestion, normalizedAnswer);
+
+    await finalizeSubmission(currentQuestion, normalizedAnswer, {
+      isCorrect,
+      submittedAnswer: normalizedAnswer || '(입력 없음)',
+      expectedAnswer: currentQuestion.answer || '(출력 없음)',
+    });
+  };
+
+  /**
+   * Handles one line submission in coding mode and runs tests on empty line.
+   *
+   * @param {string} value - Submitted line value.
+   * @return {Promise<void>} Resolves after editing or grading updates.
+   */
+  const handleCodingLineSubmit = async (value: string): Promise<void> => {
+    if (!currentQuestion || currentQuestion.type !== 'coding' || isCheckingCode) {
+      return;
+    }
+
+    const nextLines = [...codingLines];
+    nextLines[currentCodingLine] = value;
+
+    if (value.trim() === '' && currentCodingLine > 0) {
+      const linesForRun = [...nextLines];
+      while (linesForRun.length > 0 && linesForRun[linesForRun.length - 1].trim() === '') {
+        linesForRun.pop();
+      }
+
+      const userCode = linesForRun.join('\n');
+      setCodingLines(nextLines);
+      setIsCheckingCode(true);
+
+      try {
+        const evaluation = await evaluateCodingSubmission(currentQuestion, userCode);
+        const answerToken = evaluation.isCorrect ? '__PASS__' : '__FAIL__';
+        const detailLines = evaluation.cases.map((item, index) => (
+          `[${index + 1}] ${item.passed ? '통과' : '실패'} | 입력=${toPreview(item.input)} | 실제=${toPreview(item.actual)}`
+        ));
+
+        await finalizeSubmission(currentQuestion, answerToken, {
+          isCorrect: evaluation.isCorrect,
+          submittedAnswer: `${evaluation.passCount}/${evaluation.totalCount} 테스트 통과`,
+          expectedAnswer: `모든 테스트 통과 (${evaluation.totalCount}/${evaluation.totalCount})`,
+          details: detailLines,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '코드 채점에 실패했습니다.');
+      } finally {
+        setIsCheckingCode(false);
+      }
+      return;
+    }
+
+    nextLines.push('');
+    setCodingLines(nextLines);
+    setCurrentCodingLine(currentCodingLine + 1);
+  };
+
   if (phase === 'generating') {
     return (
       <Box flexDirection="column">
@@ -161,23 +264,33 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
             <Text bold color="cyan">C 진단 평가</Text>
             <Text color="gray">{currentIndex + 1}/{TOTAL_QUESTIONS}</Text>
           </Box>
+
           <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
-          <Box paddingX={2} paddingY={1}>
+
+          <Box paddingX={2} paddingY={1} flexDirection="column">
             {feedback && (
               <Box flexDirection="column" marginBottom={1}>
                 <Text color={feedback.isCorrect ? 'green' : 'red'}>
                   {feedback.isCorrect ? '정답입니다.' : '오답입니다.'}
                 </Text>
-                <Text color="gray">내 답안: {feedback.submittedAnswer || '(입력 없음)'}</Text>
+                <Text color="gray">내 답안: {feedback.submittedAnswer}</Text>
                 {!feedback.isCorrect && (
-                  <Text color="gray">정답: {feedback.expectedAnswer || '(출력 없음)'}</Text>
+                  <Text color="gray">정답: {feedback.expectedAnswer}</Text>
+                )}
+                {feedback.details && feedback.details.length > 0 && (
+                  <Box marginTop={1} flexDirection="column">
+                    {feedback.details.map((line, index) => (
+                      <Text key={index} color="gray">{line}</Text>
+                    ))}
+                  </Box>
                 )}
               </Box>
             )}
+
             {error ? (
               <Box flexDirection="column">
                 <Text color="red">{error}</Text>
-                <Text color="gray">R: 재시도</Text>
+                <Text color="gray">R: retry</Text>
               </Box>
             ) : (
               <Box>
@@ -211,6 +324,7 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
           <Box>
             <Text color="gray">{currentIndex + 1}/{TOTAL_QUESTIONS}</Text>
             <Text color="yellow"> {CATEGORY_LABELS[currentQuestion.category]}</Text>
+            <Text color="gray"> · {currentQuestion.type === 'coding' ? '코드 작성형' : '출력 예측형'}</Text>
           </Box>
         </Box>
 
@@ -218,10 +332,23 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
 
         <Box paddingX={2} paddingY={1} flexDirection="column">
           <Text>{currentQuestion.question}</Text>
+
           {currentQuestion.code && (
             <Box marginTop={1} flexDirection="column">
+              <Text color="cyan">{currentQuestion.type === 'coding' ? '스타터 코드' : '문제 코드'}</Text>
               {questionCodeLines.map((line, index) => (
                 <AssessmentCodeLine key={index} line={line} lineNumber={index + 1} />
+              ))}
+            </Box>
+          )}
+
+          {currentQuestion.type === 'coding' && (
+            <Box marginTop={1} flexDirection="column">
+              <Text color="cyan">테스트 케이스 ({currentQuestion.testCases?.length || 0}개)</Text>
+              {(currentQuestion.testCases || []).map((testCase, index) => (
+                <Text key={index} color="gray">
+                  [{index + 1}] 입력: {toPreview(testCase.input)} (기대 출력은 숨김)
+                </Text>
               ))}
             </Box>
           )}
@@ -235,15 +362,50 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
           </Box>
         )}
 
-        <Box paddingX={2}>
-          <Text color="cyan">{'>'} </Text>
-          <TextInput
-            value={input}
-            onChange={setInput}
-            onSubmit={handleSubmit}
-            placeholder="정답 입력"
-          />
-        </Box>
+        {currentQuestion.type === 'output' ? (
+          <Box paddingX={2}>
+            <Text color="cyan">{'>'} </Text>
+            <TextInput
+              value={input}
+              onChange={setInput}
+              onSubmit={handleOutputSubmit}
+              placeholder="정답 입력"
+            />
+          </Box>
+        ) : (
+          <Box paddingX={2} paddingY={1} flexDirection="column">
+            <Text color="gray">빈 줄 입력 시 코드 채점</Text>
+            <Box borderStyle="round" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
+              {codingLines.map((line, index) => (
+                <Box key={index}>
+                  <Text color="gray">{String(index + 1).padStart(3, ' ')}</Text>
+                  <Text color="gray"> | </Text>
+                  {index === currentCodingLine ? (
+                    <TextInput
+                      value={line}
+                      onChange={(next) => {
+                        const updated = [...codingLines];
+                        updated[index] = next;
+                        setCodingLines(updated);
+                      }}
+                      onSubmit={handleCodingLineSubmit}
+                      placeholder="코드를 입력하세요..."
+                    />
+                  ) : (
+                    <HighlightedLine line={line.length > 0 ? line : ' '} />
+                  )}
+                </Box>
+              ))}
+            </Box>
+
+            {isCheckingCode && (
+              <Box marginTop={1}>
+                <Text color="cyan"><Spinner type="dots" /></Text>
+                <Text> 코드 채점 중...</Text>
+              </Box>
+            )}
+          </Box>
+        )}
 
         <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
 
