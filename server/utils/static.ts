@@ -5,10 +5,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const STATIC_ROOTS = [
-  normalize(join(__dirname, '../../webapp/dist')),
-  normalize(join(__dirname, '../../web')),
-];
+const STATIC_ROOTS = [normalize(join(__dirname, '../../webapp/dist'))];
 
 /**
  * Maps file extension to content type.
