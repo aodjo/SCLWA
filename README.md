@@ -1,6 +1,9 @@
 # SCLWA
 
-SCLWA is now fully migrated to a web platform built with React + Tailwind CSS.
+SCLWA is organized as a split web platform:
+
+- `webapp/`: React + Tailwind frontend
+- `server/`: Hono API server
 
 ## Features (Web)
 
@@ -30,5 +33,5 @@ npm run web:build
 ## Legacy CLI
 
 ```bash
-npm run dev
+npm run cli:dev
 ```
