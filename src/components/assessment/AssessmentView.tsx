@@ -324,87 +324,117 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
           <Box>
             <Text color="gray">{currentIndex + 1}/{TOTAL_QUESTIONS}</Text>
             <Text color="yellow"> {CATEGORY_LABELS[currentQuestion.category]}</Text>
-            <Text color="gray"> · {currentQuestion.type === 'coding' ? '코드 작성형' : '출력 예측형'}</Text>
+            <Text color="gray"> | {currentQuestion.type === 'coding' ? '코드 작성형' : '출력 예측형'}</Text>
           </Box>
         </Box>
 
         <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
-
-        <Box paddingX={2} paddingY={1} flexDirection="column">
-          <Text>{currentQuestion.question}</Text>
-
-          {currentQuestion.code && (
-            <Box marginTop={1} flexDirection="column">
-              <Text color="cyan">{currentQuestion.type === 'coding' ? '스타터 코드' : '문제 코드'}</Text>
-              {questionCodeLines.map((line, index) => (
-                <AssessmentCodeLine key={index} line={line} lineNumber={index + 1} />
-              ))}
-            </Box>
-          )}
-
-          {currentQuestion.type === 'coding' && (
-            <Box marginTop={1} flexDirection="column">
-              <Text color="cyan">테스트 케이스 ({currentQuestion.testCases?.length || 0}개)</Text>
-              {(currentQuestion.testCases || []).map((testCase, index) => (
-                <Text key={index} color="gray">
-                  [{index + 1}] 입력: {toPreview(testCase.input)} (기대 출력은 숨김)
-                </Text>
-              ))}
-            </Box>
-          )}
-        </Box>
-
-        <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
-
-        {showHint && currentQuestion.hints[0] && (
-          <Box paddingX={2}>
-            <Text color="yellow" wrap="wrap">힌트: {currentQuestion.hints[0]}</Text>
-          </Box>
-        )}
 
         {currentQuestion.type === 'output' ? (
-          <Box paddingX={2}>
-            <Text color="cyan">{'>'} </Text>
-            <TextInput
-              value={input}
-              onChange={setInput}
-              onSubmit={handleOutputSubmit}
-              placeholder="정답 입력"
-            />
-          </Box>
-        ) : (
-          <Box paddingX={2} paddingY={1} flexDirection="column">
-            <Text color="gray">빈 줄 입력 시 코드 채점</Text>
-            <Box borderStyle="round" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
-              {codingLines.map((line, index) => (
-                <Box key={index}>
-                  <Text color="gray">{String(index + 1).padStart(3, ' ')}</Text>
-                  <Text color="gray"> | </Text>
-                  {index === currentCodingLine ? (
-                    <TextInput
-                      value={line}
-                      onChange={(next) => {
-                        const updated = [...codingLines];
-                        updated[index] = next;
-                        setCodingLines(updated);
-                      }}
-                      onSubmit={handleCodingLineSubmit}
-                      placeholder="코드를 입력하세요..."
-                    />
-                  ) : (
-                    <HighlightedLine line={line.length > 0 ? line : ' '} />
-                  )}
+          <>
+            <Box paddingX={2} paddingY={1} flexDirection="column">
+              <Text>{currentQuestion.question}</Text>
+
+              {currentQuestion.code && (
+                <Box marginTop={1} flexDirection="column">
+                  <Text color="cyan">문제 코드</Text>
+                  {questionCodeLines.map((line, index) => (
+                    <AssessmentCodeLine key={index} line={line} lineNumber={index + 1} />
+                  ))}
                 </Box>
-              ))}
+              )}
             </Box>
 
-            {isCheckingCode && (
-              <Box marginTop={1}>
-                <Text color="cyan"><Spinner type="dots" /></Text>
-                <Text> 코드 채점 중...</Text>
+            <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
+
+            {showHint && currentQuestion.hints[0] && (
+              <Box paddingX={2}>
+                <Text color="yellow" wrap="wrap">힌트: {currentQuestion.hints[0]}</Text>
               </Box>
             )}
-          </Box>
+
+            <Box paddingX={2}>
+              <Text color="cyan">{'>'} </Text>
+              <TextInput
+                value={input}
+                onChange={setInput}
+                onSubmit={handleOutputSubmit}
+                placeholder="정답 입력"
+              />
+            </Box>
+          </>
+        ) : (
+          <>
+            <Box paddingX={2} paddingY={1} flexDirection="row">
+              <Box flexGrow={1} flexBasis={0} borderStyle="round" borderColor="gray" paddingX={1} flexDirection="column" marginRight={1}>
+                <Text color="cyan">문제</Text>
+                <Box marginTop={1} flexDirection="column">
+                  <Text>{currentQuestion.question}</Text>
+                </Box>
+
+                {currentQuestion.code && (
+                  <Box marginTop={1} flexDirection="column">
+                    <Text color="cyan">스타터 코드</Text>
+                    {questionCodeLines.map((line, index) => (
+                      <AssessmentCodeLine key={index} line={line} lineNumber={index + 1} />
+                    ))}
+                  </Box>
+                )}
+
+                <Box marginTop={1} flexDirection="column">
+                  <Text color="cyan">테스트 케이스 ({currentQuestion.testCases?.length || 0}개)</Text>
+                  {(currentQuestion.testCases || []).map((testCase, index) => (
+                    <Text key={index} color="gray">
+                      [{index + 1}] 입력: {toPreview(testCase.input)} (기대 출력은 숨김)
+                    </Text>
+                  ))}
+                </Box>
+              </Box>
+
+              <Box flexGrow={1} flexBasis={0} borderStyle="round" borderColor="gray" paddingX={1} flexDirection="column" marginLeft={1}>
+                <Text color="cyan">코드 에디터</Text>
+                <Text color="gray">빈 줄 입력 시 코드 채점</Text>
+
+                <Box borderStyle="round" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
+                  {codingLines.map((line, index) => (
+                    <Box key={index}>
+                      <Text color="gray">{String(index + 1).padStart(3, ' ')}</Text>
+                      <Text color="gray"> | </Text>
+                      {index === currentCodingLine ? (
+                        <TextInput
+                          value={line}
+                          onChange={(next) => {
+                            const updated = [...codingLines];
+                            updated[index] = next;
+                            setCodingLines(updated);
+                          }}
+                          onSubmit={handleCodingLineSubmit}
+                          placeholder="코드를 입력하세요..."
+                        />
+                      ) : (
+                        <HighlightedLine line={line.length > 0 ? line : ' '} />
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+
+                {isCheckingCode && (
+                  <Box marginTop={1}>
+                    <Text color="cyan"><Spinner type="dots" /></Text>
+                    <Text> 코드 채점 중...</Text>
+                  </Box>
+                )}
+              </Box>
+            </Box>
+
+            <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
+
+            {showHint && currentQuestion.hints[0] && (
+              <Box paddingX={2}>
+                <Text color="yellow" wrap="wrap">힌트: {currentQuestion.hints[0]}</Text>
+              </Box>
+            )}
+          </>
         )}
 
         <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
