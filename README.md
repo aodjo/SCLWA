@@ -2,7 +2,7 @@
 
 SCLWA is organized as a split web platform:
 
-- `webapp/`: React + Tailwind frontend
+- `client/`: React + Tailwind frontend
 - `server/`: Hono API server
 
 `src/` has been fully merged into `server/` and removed.

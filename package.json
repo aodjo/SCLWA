@@ -8,9 +8,9 @@
     "dev": "npm run web:dev",
     "web": "tsx server/index.ts",
     "web:api": "tsx server/index.ts",
-    "web:client": "vite --config webapp/vite.config.ts",
+    "web:client": "vite --config client/vite.config.ts",
     "web:dev": "concurrently \"npm run web:api\" \"npm run web:client\"",
-    "web:build": "vite build --config webapp/vite.config.ts",
+    "web:build": "vite build --config client/vite.config.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
