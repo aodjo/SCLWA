@@ -143,15 +143,6 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
     }
   };
 
-  useInput((char) => {
-    if (char.toLowerCase() === 'h' && phase === 'answering') {
-      setShowHint((value) => !value);
-    }
-    if (char.toLowerCase() === 'r' && error) {
-      void generateNextQuestion(currentIndex);
-    }
-  });
-
   /**
    * Saves submission result, advances question index, or finishes assessment.
    *
@@ -207,51 +198,84 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
   };
 
   /**
-   * Handles one line submission in coding mode and runs tests on empty line.
+   * Runs coding submission against test cases and stores the result.
+   *
+   * @return {Promise<void>} Resolves after grading and state transition.
+   */
+  const runCodingEvaluation = async (): Promise<void> => {
+    if (!currentQuestion || currentQuestion.type !== 'coding' || isCheckingCode) {
+      return;
+    }
+
+    const linesForRun = [...codingLines];
+    while (linesForRun.length > 0 && linesForRun[linesForRun.length - 1].trim() === '') {
+      linesForRun.pop();
+    }
+
+    if (linesForRun.length === 0) {
+      setError('코드를 먼저 입력하세요.');
+      return;
+    }
+
+    const userCode = linesForRun.join('\n');
+    setIsCheckingCode(true);
+    setError(null);
+
+    try {
+      const evaluation = await evaluateCodingSubmission(currentQuestion, userCode);
+      const answerToken = evaluation.isCorrect ? '__PASS__' : '__FAIL__';
+      const detailLines = evaluation.cases.map((item, index) => (
+        `[${index + 1}] ${item.passed ? '통과' : '실패'} | 입력=${toPreview(item.input)} | 실제=${toPreview(item.actual)}`
+      ));
+
+      await finalizeSubmission(currentQuestion, answerToken, {
+        isCorrect: evaluation.isCorrect,
+        submittedAnswer: `${evaluation.passCount}/${evaluation.totalCount} 테스트 통과`,
+        expectedAnswer: `모든 테스트 통과 (${evaluation.totalCount}/${evaluation.totalCount})`,
+        details: detailLines,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '코드 채점에 실패했습니다.');
+    } finally {
+      setIsCheckingCode(false);
+    }
+  };
+
+  useInput((inputChar, key) => {
+    if (phase !== 'answering') {
+      return;
+    }
+
+    if (key.ctrl && inputChar.toLowerCase() === 'h') {
+      setShowHint((value) => !value);
+      return;
+    }
+
+    if (key.ctrl && inputChar.toLowerCase() === 'p' && currentQuestion?.type === 'coding') {
+      void runCodingEvaluation();
+      return;
+    }
+
+    if (inputChar.toLowerCase() === 'r' && error) {
+      void generateNextQuestion(currentIndex);
+    }
+  });
+
+  /**
+   * Handles one line submission in coding mode by advancing editor line.
    *
    * @param {string} value - Submitted line value.
-   * @return {Promise<void>} Resolves after editing or grading updates.
+   * @return {void} Updates editor buffer and cursor position.
    */
-  const handleCodingLineSubmit = async (value: string): Promise<void> => {
+  const handleCodingLineSubmit = (value: string): void => {
     if (!currentQuestion || currentQuestion.type !== 'coding' || isCheckingCode) {
       return;
     }
 
     const nextLines = [...codingLines];
     nextLines[currentCodingLine] = value;
-
-    if (value.trim() === '' && currentCodingLine > 0) {
-      const linesForRun = [...nextLines];
-      while (linesForRun.length > 0 && linesForRun[linesForRun.length - 1].trim() === '') {
-        linesForRun.pop();
-      }
-
-      const userCode = linesForRun.join('\n');
-      setCodingLines(nextLines);
-      setIsCheckingCode(true);
-
-      try {
-        const evaluation = await evaluateCodingSubmission(currentQuestion, userCode);
-        const answerToken = evaluation.isCorrect ? '__PASS__' : '__FAIL__';
-        const detailLines = evaluation.cases.map((item, index) => (
-          `[${index + 1}] ${item.passed ? '통과' : '실패'} | 입력=${toPreview(item.input)} | 실제=${toPreview(item.actual)}`
-        ));
-
-        await finalizeSubmission(currentQuestion, answerToken, {
-          isCorrect: evaluation.isCorrect,
-          submittedAnswer: `${evaluation.passCount}/${evaluation.totalCount} 테스트 통과`,
-          expectedAnswer: `모든 테스트 통과 (${evaluation.totalCount}/${evaluation.totalCount})`,
-          details: detailLines,
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '코드 채점에 실패했습니다.');
-      } finally {
-        setIsCheckingCode(false);
-      }
-      return;
-    }
-
     nextLines.push('');
+
     setCodingLines(nextLines);
     setCurrentCodingLine(currentCodingLine + 1);
   };
@@ -393,9 +417,9 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
 
               <Box flexGrow={1} flexBasis={0} borderStyle="round" borderColor="gray" paddingX={1} flexDirection="column" marginLeft={1}>
                 <Text color="cyan">코드 에디터</Text>
-                <Text color="gray">빈 줄 입력 시 코드 채점</Text>
+                <Text color="gray">Ctrl+P로 코드 채점</Text>
 
-                <Box borderStyle="round" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
+                <Box marginTop={1} flexDirection="column">
                   {codingLines.map((line, index) => (
                     <Box key={index}>
                       <Text color="gray">{String(index + 1).padStart(3, ' ')}</Text>
@@ -440,7 +464,11 @@ export function AssessmentView({ onComplete }: AssessmentViewProps) {
         <Box borderStyle="single" borderColor="gray" borderTop={false} borderLeft={false} borderRight={false} />
 
         <Box paddingX={2}>
-          <Text color="gray">H: 힌트</Text>
+          <Text color="gray">
+            {currentQuestion.type === 'coding'
+              ? 'Ctrl+H: 힌트 | Ctrl+P: 코드 채점'
+              : 'Ctrl+H: 힌트'}
+          </Text>
         </Box>
       </Box>
     </Box>
