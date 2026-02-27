@@ -1,5 +1,5 @@
 import type { Hono } from 'hono';
-import { getGeminiClient } from '../../src/services/gemini-client.js';
+import { getGeminiClient } from '../services/gemini-client.js';
 import { jsonError, readJsonBody } from '../utils/http.js';
 
 /**

@@ -1,4 +1,4 @@
-import type { AssessmentCategory, AssessmentQuestionType } from '../../src/services/assessment.js';
+import type { AssessmentCategory, AssessmentQuestionType } from '../services/assessment.js';
 import { CATEGORIES, CODING_QUESTION_COUNT, TOTAL_QUESTIONS } from '../config.js';
 
 /**

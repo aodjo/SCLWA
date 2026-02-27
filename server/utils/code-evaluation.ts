@@ -1,4 +1,4 @@
-import { runCCode } from '../../src/services/docker-runner.js';
+import { runCCode } from '../services/docker-runner.js';
 
 export interface CodeChallengeDetail {
   index: number;

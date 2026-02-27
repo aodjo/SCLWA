@@ -5,8 +5,8 @@ import {
   evaluateCodingSubmission,
   generateQuestion,
   type AssessmentQuestion,
-} from '../../src/services/assessment.js';
-import { loadProgress, saveAssessment, saveProgress } from '../../src/services/storage.js';
+} from '../services/assessment.js';
+import { loadProgress, saveAssessment, saveProgress } from '../services/storage.js';
 import type { EvaluateAssessmentRequest } from '../types.js';
 import { resolveQuestionMeta } from '../utils/assessment-meta.js';
 import { jsonError, readJsonBody } from '../utils/http.js';

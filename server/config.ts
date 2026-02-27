@@ -1,4 +1,4 @@
-import type { AssessmentCategory } from '../src/services/assessment.js';
+import type { AssessmentCategory } from './services/assessment.js';
 
 export const PORT = Number(process.env.PORT || 5174);
 export const HOST = process.env.HOST || '127.0.0.1';

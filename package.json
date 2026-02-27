@@ -1,15 +1,11 @@
 {
   "name": "c-tutor",
   "version": "1.0.0",
-  "description": "Interactive C language learning CLI app with Codex AI",
+  "description": "Study C with AI web platform",
   "type": "module",
   "main": "dist/index.js",
-  "bin": {
-    "c-tutor": "./dist/index.js"
-  },
   "scripts": {
     "dev": "npm run web:dev",
-    "cli:dev": "tsx src/index.tsx",
     "web": "tsx server/index.ts",
     "web:api": "tsx server/index.ts",
     "web:client": "vite --config webapp/vite.config.ts",
@@ -25,8 +21,8 @@
   "keywords": [
     "c",
     "learning",
-    "cli",
-    "codex",
+    "web",
+    "gemini",
     "ai",
     "tutor"
   ],

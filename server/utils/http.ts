@@ -19,7 +19,7 @@ export function toErrorMessage(error: unknown): string {
  * @returns {Response} JSON error response.
  */
 export function jsonError(c: Context, status: number, message: string): Response {
-  return c.json({ error: message }, status);
+  return c.json({ error: message }, status as never);
 }
 
 /**

@@ -4,7 +4,7 @@ import {
   loadGeminiApiKey,
   loadProgress,
   saveGeminiApiKey,
-} from '../../src/services/storage.js';
+} from '../services/storage.js';
 import { jsonError, readJsonBody } from '../utils/http.js';
 
 /**

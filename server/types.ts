@@ -1,5 +1,5 @@
-import type { AssessmentQuestion } from '../src/services/assessment.js';
-import type { Puzzle } from '../src/types/index.js';
+import type { AssessmentQuestion } from './services/assessment.js';
+import type { Puzzle } from './types/index.js';
 
 export interface EvaluateAssessmentRequest {
   question: AssessmentQuestion;

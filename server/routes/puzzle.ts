@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
-import { generatePuzzle } from '../../src/services/puzzle-generator.js';
-import { markPuzzleCompleted } from '../../src/services/storage.js';
-import type { PuzzleType, SkillLevel } from '../../src/types/index.js';
+import { generatePuzzle } from '../services/puzzle-generator.js';
+import { markPuzzleCompleted } from '../services/storage.js';
+import type { PuzzleType, SkillLevel } from '../types/index.js';
 import type { PuzzleEvaluateRequest } from '../types.js';
 import { jsonError, readJsonBody } from '../utils/http.js';
 import { evaluateCodeChallenge } from '../utils/code-evaluation.js';

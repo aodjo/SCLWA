@@ -5,7 +5,9 @@ SCLWA is organized as a split web platform:
 - `webapp/`: React + Tailwind frontend
 - `server/`: Hono API server
 
-## Features (Web)
+`src/` has been fully merged into `server/` and removed.
+
+## Features
 
 - Assessment (output + coding problems)
 - Puzzle mode (fill blank, bug finder, code challenge)
@@ -28,10 +30,4 @@ npm run web:dev
 ```bash
 npm run build
 npm run web:build
-```
-
-## Legacy CLI
-
-```bash
-npm run cli:dev
 ```
