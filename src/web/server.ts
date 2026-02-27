@@ -22,7 +22,10 @@ const HOST = process.env.HOST || '127.0.0.1';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const STATIC_ROOT = normalize(join(__dirname, '../../web'));
+const STATIC_ROOTS = [
+  normalize(join(__dirname, '../../webapp/dist')),
+  normalize(join(__dirname, '../../web')),
+];
 
 interface EvaluateRequest {
   question: AssessmentQuestion;
@@ -127,7 +130,7 @@ function contentTypeFor(extension: string): string {
 }
 
 /**
- * Serves static asset from web root folder.
+ * Serves static asset from configured web roots.
  *
  * @param {string} pathname - Request pathname.
  * @param {ServerResponse} res - HTTP response object.
@@ -135,16 +138,27 @@ function contentTypeFor(extension: string): string {
  */
 async function serveStatic(pathname: string, res: ServerResponse): Promise<boolean> {
   const normalizedPath = pathname === '/' ? '/index.html' : pathname;
-  const requestedPath = normalize(join(STATIC_ROOT, normalizedPath));
 
-  if (!requestedPath.startsWith(STATIC_ROOT)) {
-    sendText(res, 403, 'Forbidden');
-    return true;
+  for (const staticRoot of STATIC_ROOTS) {
+    const requestedPath = normalize(join(staticRoot, normalizedPath));
+    if (!requestedPath.startsWith(staticRoot)) {
+      continue;
+    }
+
+    try {
+      const data = await readFile(requestedPath);
+      res.writeHead(200, { 'Content-Type': contentTypeFor(extname(requestedPath)) });
+      res.end(data);
+      return true;
+    } catch {
+      // try next root
+    }
   }
 
   try {
-    const data = await readFile(requestedPath);
-    res.writeHead(200, { 'Content-Type': contentTypeFor(extname(requestedPath)) });
+    const fallbackIndex = normalize(join(STATIC_ROOTS[0], 'index.html'));
+    const data = await readFile(fallbackIndex);
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(data);
     return true;
   } catch {
