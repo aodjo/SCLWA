@@ -89,7 +89,7 @@ export default function Settings({ onComplete }: SettingsProps) {
     <div className="min-h-[calc(100vh-2rem)] flex items-center justify-center p-8">
       <div className="w-full max-w-md">
         <h1 className="text-3xl font-bold text-center mb-2">SCLWA</h1>
-        <p className="text-zinc-500 text-center mb-8">AI를 선택하고 API 키를 입력하세요</p>
+        <p className="text-zinc-500 text-center mb-8">AI를 선택하고 API 키를 입력해주세요</p>
 
         <div className="flex flex-col gap-3 mb-6">
           {AI_PROVIDERS.map((provider) => {
