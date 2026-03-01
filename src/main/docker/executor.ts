@@ -88,7 +88,7 @@ fi
         AttachStdin: true,
         AttachStdout: true,
         AttachStderr: true,
-        Tty: true,
+        Tty: false,
         OpenStdin: true,
         StdinOnce: false,
         NetworkDisabled: true,
@@ -113,21 +113,36 @@ fi
 
       let compilePhase = true;
       let compileOutput = '';
+      let buffer = Buffer.alloc(0);
 
       stream.on('data', (chunk: Buffer) => {
-        const text = chunk.toString('utf8');
+        buffer = Buffer.concat([buffer, chunk]);
 
-        if (compilePhase) {
-          if (text.includes('---COMPILE_SUCCESS---')) {
-            compilePhase = false;
-            const parts = text.split('---COMPILE_SUCCESS---');
-            if (parts[0]) compileOutput += parts[0];
-            if (parts[1]) callbacks.onStdout(parts[1]);
+        while (buffer.length >= 8) {
+          const type = buffer[0];
+          const size = buffer.readUInt32BE(4);
+
+          if (buffer.length < 8 + size) break;
+
+          const payload = buffer.subarray(8, 8 + size).toString('utf8');
+          buffer = buffer.subarray(8 + size);
+
+          if (compilePhase) {
+            if (payload.includes('---COMPILE_SUCCESS---')) {
+              compilePhase = false;
+              const parts = payload.split('---COMPILE_SUCCESS---');
+              if (parts[0]) compileOutput += parts[0];
+              if (parts[1]) callbacks.onStdout(parts[1]);
+            } else {
+              compileOutput += payload;
+            }
           } else {
-            compileOutput += text;
+            if (type === 1) {
+              callbacks.onStdout(payload);
+            } else if (type === 2) {
+              callbacks.onStderr(payload);
+            }
           }
-        } else {
-          callbacks.onStdout(text);
         }
       });
 
