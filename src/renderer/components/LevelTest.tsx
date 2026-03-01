@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import ProblemPanel from './ProblemPanel';
 import EditorPanel from './EditorPanel';
 import ChatPanel from './ChatPanel';
@@ -259,28 +260,35 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
   }
 
   return (
-    <div className="h-[calc(100vh-2rem)] flex">
-      <div className={`${showEditor ? 'w-1/3' : 'w-1/2'} border-r border-zinc-800 flex flex-col`}>
-        <ProblemPanel
-          problem={currentProblem}
-          selectedChoice={selectedChoice}
-          onSelectChoice={setSelectedChoice}
-          predictAnswer={predictAnswer}
-          onPredictAnswerChange={setPredictAnswer}
-          onSubmit={submitAnswer}
-          submitting={submitting}
-        />
-      </div>
+    <div className="h-[calc(100vh-2rem)]">
+      <PanelGroup direction="horizontal">
+        <Panel defaultSize={showEditor ? 33 : 50} minSize={20}>
+          <ProblemPanel
+            problem={currentProblem}
+            selectedChoice={selectedChoice}
+            onSelectChoice={setSelectedChoice}
+            predictAnswer={predictAnswer}
+            onPredictAnswerChange={setPredictAnswer}
+            onSubmit={submitAnswer}
+            submitting={submitting}
+          />
+        </Panel>
 
-      {showEditor && (
-        <div className="w-1/3 border-r border-zinc-800 flex flex-col">
-          <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} submitting={submitting} />
-        </div>
-      )}
+        <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-zinc-600 transition-colors cursor-col-resize" />
 
-      <div className={`${showEditor ? 'w-1/3' : 'w-1/2'} flex flex-col`}>
-        <ChatPanel messages={messages} onSendMessage={handleSendMessage} />
-      </div>
+        {showEditor && (
+          <>
+            <Panel defaultSize={33} minSize={20}>
+              <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} submitting={submitting} />
+            </Panel>
+            <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-zinc-600 transition-colors cursor-col-resize" />
+          </>
+        )}
+
+        <Panel defaultSize={showEditor ? 33 : 50} minSize={20}>
+          <ChatPanel messages={messages} onSendMessage={handleSendMessage} />
+        </Panel>
+      </PanelGroup>
     </div>
   );
 }
