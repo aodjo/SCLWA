@@ -101,11 +101,8 @@ export default function EditorPanel({ code, onChange, onSubmit, submitting }: Ed
       </div>
 
       <div className="border-t border-zinc-700">
-        <div className="flex items-center border-b border-zinc-700">
-          <div className="px-4 py-2 border-r border-zinc-700 bg-zinc-800">
-            <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
-          </div>
-          <div className="flex-1 h-0.5 bg-amber-500" />
+        <div className="px-4 py-2 bg-zinc-800 border-b border-zinc-700">
+          <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
         </div>
 
         <div className="h-32 p-4 overflow-auto bg-zinc-950">
