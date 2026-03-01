@@ -1,5 +1,4 @@
 import Docker from 'dockerode';
-import { Duplex } from 'stream';
 import { ExecutionResult, TestCaseResult, TestResult } from './types';
 
 const DOCKER_IMAGE = 'gcc:latest';
@@ -19,7 +18,7 @@ export class CodeExecutor {
   private docker: Docker;
   private imageReady: boolean = false;
   private runningContainer: Docker.Container | null = null;
-  private interactiveStream: Duplex | null = null;
+  private interactiveStream: NodeJS.ReadWriteStream | null = null;
 
   constructor() {
     this.docker = new Docker();
