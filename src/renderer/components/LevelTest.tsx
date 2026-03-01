@@ -100,6 +100,32 @@ export default function LevelTest() {
   };
 
   /**
+   * Passes (skips) the current problem
+   */
+  const passCurrentProblem = async () => {
+    if (!currentProblem || submitting) return;
+
+    setSubmitting(true);
+
+    const problemResult: ProblemResult = {
+      problem: currentProblem,
+      correct: false,
+      userAnswer: '',
+    };
+
+    setResults((prev) => [...prev, problemResult]);
+
+    if (currentIndex + 1 >= TOTAL_PROBLEMS) {
+      setFinished(true);
+      setSubmitting(false);
+    } else {
+      setCurrentIndex((prev) => prev + 1);
+      await generateProblem(currentIndex + 1);
+      setSubmitting(false);
+    }
+  };
+
+  /**
    * Submits the current answer for grading
    */
   const submitAnswer = async () => {
@@ -271,6 +297,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
               predictAnswer={predictAnswer}
               onPredictAnswerChange={setPredictAnswer}
               onSubmit={submitAnswer}
+              onPass={passCurrentProblem}
               submitting={submitting}
             />
           </div>
@@ -282,7 +309,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
           <>
             <Panel defaultSize="33%" minSize="20%">
               <div className="h-full flex flex-col">
-                <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} submitting={submitting} />
+                <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} onPass={passCurrentProblem} submitting={submitting} />
               </div>
             </Panel>
             <Separator className="resize-handle" />

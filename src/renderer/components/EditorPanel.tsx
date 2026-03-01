@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Editor from '@monaco-editor/react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
+
+const C_STANDARDS = ['C17', 'C11', 'C99'] as const;
 
 interface EditorPanelProps {
   code: string;
   onChange: (code: string) => void;
   onSubmit?: () => void;
+  onPass?: () => void;
   submitting?: boolean;
 }
 
@@ -19,10 +22,26 @@ interface EditorPanelProps {
  * @param submitting - Whether submission is in progress
  * @returns Editor panel component
  */
-export default function EditorPanel({ code, onChange, onSubmit, submitting }: EditorPanelProps) {
+export default function EditorPanel({ code, onChange, onSubmit, onPass, submitting }: EditorPanelProps) {
   const { t } = useTranslation();
   const [output, setOutput] = useState<string>('');
   const [running, setRunning] = useState(false);
+  const [standard, setStandard] = useState<typeof C_STANDARDS[number]>('C17');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    /**
+     * Closes dropdown when clicking outside
+     */
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   /**
    * Resets the code editor to empty state
@@ -58,11 +77,35 @@ export default function EditorPanel({ code, onChange, onSubmit, submitting }: Ed
       <div className="flex items-center justify-between px-2 py-1 border-b border-zinc-700 bg-zinc-800">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-zinc-300 px-2 py-1 border-r border-zinc-700">C</span>
-          <select className="bg-zinc-700 text-zinc-300 text-sm px-2 py-1 rounded border-none outline-none cursor-pointer">
-            <option>C17</option>
-            <option>C11</option>
-            <option>C99</option>
-          </select>
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="flex items-center gap-1 bg-zinc-700 text-zinc-300 text-sm px-2 py-1 rounded cursor-pointer hover:bg-zinc-600 transition-colors"
+            >
+              {standard}
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {dropdownOpen && (
+              <div className="absolute top-full left-0 mt-2 bg-zinc-700 rounded-lg shadow-lg z-10 min-w-full p-1">
+                {C_STANDARDS.map((std) => (
+                  <button
+                    key={std}
+                    onClick={() => {
+                      setStandard(std);
+                      setDropdownOpen(false);
+                    }}
+                    className={`block w-full text-left px-3 py-1.5 text-sm cursor-pointer transition-colors rounded ${
+                      standard === std ? 'bg-zinc-600 text-white' : 'text-zinc-300 hover:bg-zinc-600'
+                    }`}
+                  >
+                    {std}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -118,7 +161,16 @@ export default function EditorPanel({ code, onChange, onSubmit, submitting }: Ed
               </pre>
             </div>
 
-            <div className="p-2 border-t border-zinc-700 flex justify-end">
+            <div className="p-2 border-t border-zinc-700 flex justify-end gap-2">
+              {onPass && (
+                <button
+                  onClick={onPass}
+                  disabled={submitting}
+                  className="px-4 py-1.5 text-sm bg-zinc-600 text-white rounded hover:bg-zinc-500 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {t('editor.pass')}
+                </button>
+              )}
               <button
                 onClick={onSubmit}
                 disabled={submitting}

@@ -8,6 +8,7 @@ interface ProblemPanelProps {
   predictAnswer?: string;
   onPredictAnswerChange?: (value: string) => void;
   onSubmit?: () => void;
+  onPass?: () => void;
   submitting?: boolean;
 }
 
@@ -30,6 +31,7 @@ export default function ProblemPanel({
   predictAnswer,
   onPredictAnswerChange,
   onSubmit,
+  onPass,
   submitting,
 }: ProblemPanelProps) {
   const { t } = useTranslation();
@@ -104,11 +106,20 @@ export default function ProblemPanel({
             </div>
           )}
 
-          <div className="p-4 pt-0">
+          <div className="p-4 pt-0 flex gap-2">
+            {onPass && (
+              <button
+                onClick={onPass}
+                disabled={submitting}
+                className="flex-1 bg-zinc-300 text-zinc-700 rounded-md py-2 text-sm font-medium hover:bg-zinc-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {t('problem.pass')}
+              </button>
+            )}
             <button
               onClick={onSubmit}
               disabled={submitting || (problem.type === 'multiple-choice' && selectedChoice === null)}
-              className="w-full bg-zinc-800 text-white rounded-md py-2 text-sm font-medium hover:bg-zinc-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 bg-zinc-800 text-white rounded-md py-2 text-sm font-medium hover:bg-zinc-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? t('problem.submitting') : t('problem.submit')}
             </button>
