@@ -1,22 +1,28 @@
 import OpenAI from 'openai';
-import { AIProvider, Message, Problem, ProblemType, SemiResponse } from '../types';
+import { AIProvider, Message, Problem, StudentProgress, SemiResponse } from '../types';
 import { buildProblemPrompt } from '../prompts';
 
-const MODEL = 'gpt-5-mini-2025-08-07';
+const MODEL = 'gpt-4o-mini';
 
 const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
       name: 'generate_problem',
-      description: 'C 프로그래밍 문제를 생성합니다',
+      description: 'C 프로그래밍 문제를 생성합니다. 학생 수준에 맞는 타입과 난이도를 선택하세요.',
       parameters: {
         type: 'object',
         properties: {
           type: {
             type: 'string',
             enum: ['fill-blank', 'predict-output', 'find-bug', 'multiple-choice'],
-            description: '문제 유형',
+            description: '문제 유형 (학생 수준에 맞게 선택)',
+          },
+          difficulty: {
+            type: 'number',
+            minimum: 1,
+            maximum: 5,
+            description: '난이도 1-5 (학생 수준에 맞게 선택)',
           },
           question: {
             type: 'string',
@@ -58,14 +64,14 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
               },
               required: ['input', 'expected'],
             },
-            description: '테스트 케이스',
+            description: '테스트 케이스 (코드 채점용)',
           },
           solutionCode: {
             type: 'string',
             description: '정답 코드',
           },
         },
-        required: ['type', 'question'],
+        required: ['type', 'difficulty', 'question'],
       },
     },
   },
@@ -73,7 +79,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'send_message',
-      description: '사용자에게 메시지를 보냅니다',
+      description: '사용자에게 메시지를 보냅니다 (격려, 힌트, 조언 등)',
       parameters: {
         type: 'object',
         properties: {
@@ -83,6 +89,23 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
         },
         required: ['message'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_student_summary',
+      description: '학생 분석을 업데이트합니다 (강점, 약점, 학습 패턴 등)',
+      parameters: {
+        type: 'object',
+        properties: {
+          summary: {
+            type: 'string',
+            description: '학생 현재 상태 요약 (예: 포인터 개념에 약함, 반복문 이해도 높음)',
+          },
+        },
+        required: ['summary'],
       },
     },
   },
@@ -104,20 +127,21 @@ export class OpenAIProvider implements AIProvider {
   }
 
   /**
-   * Generates a C programming problem using function calling
+   * Generates a problem based on student progress
    *
-   * @param type - Type of problem to generate
-   * @param difficulty - Difficulty level (1-5)
-   * @param context - Optional conversation context
+   * @param progress - Student's current progress
+   * @param problemIndex - Current problem number (1-5)
    * @returns Promise resolving to Semi's response
    */
-  async generateProblem(type: ProblemType, difficulty: number, context?: Message[]): Promise<SemiResponse> {
-    const systemPrompt = buildProblemPrompt(type, difficulty);
+  async generateProblem(progress: StudentProgress, problemIndex: number): Promise<SemiResponse> {
+    const systemPrompt = buildProblemPrompt(progress, problemIndex);
+
+    console.log('[AI] Generating problem for index:', problemIndex);
+    console.log('[AI] Student summary:', progress.studentSummary || '(none)');
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...(context?.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })) ?? []),
-      { role: 'user', content: '문제를 생성해주세요.' },
+      { role: 'user', content: '다음 문제를 출제해주세요.' },
     ];
 
     const response = await this.client.chat.completions.create({
@@ -127,6 +151,8 @@ export class OpenAIProvider implements AIProvider {
       tool_choice: 'auto',
     });
 
+    console.log('[AI] Response received');
+
     const result: SemiResponse = {};
     const choice = response.choices[0];
 
@@ -135,11 +161,14 @@ export class OpenAIProvider implements AIProvider {
         if (toolCall.type !== 'function') continue;
 
         const args = JSON.parse(toolCall.function.arguments);
+        console.log('[AI] Function:', toolCall.function.name);
 
         if (toolCall.function.name === 'generate_problem') {
           result.problem = args as Problem;
         } else if (toolCall.function.name === 'send_message') {
           result.message = args.message;
+        } else if (toolCall.function.name === 'update_student_summary') {
+          result.studentSummary = args.summary;
         }
       }
     }
@@ -147,6 +176,15 @@ export class OpenAIProvider implements AIProvider {
     if (choice.message.content && !result.message) {
       result.message = choice.message.content;
     }
+
+    console.log('[AI] Result:');
+    console.dir({
+      hasProblem: !!result.problem,
+      problemType: result.problem?.type,
+      problemDifficulty: result.problem?.difficulty,
+      hasMessage: !!result.message,
+      hasSummary: !!result.studentSummary,
+    }, { colors: true, depth: null });
 
     return result;
   }

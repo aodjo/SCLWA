@@ -1,7 +1,16 @@
 import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import path from 'path';
-import { initDatabase, getAIConfigs, saveAIConfig, closeDatabase } from './database';
-import { aiAdapter, ProblemType, Message, ProviderType } from './ai';
+import {
+  initDatabase,
+  getAIConfigs,
+  saveAIConfig,
+  closeDatabase,
+  getStudentProgress,
+  saveStudentProgress,
+  saveProblemRecord,
+  resetStudentProgress,
+} from './database';
+import { aiAdapter, Message, StudentProgress, ProblemRecord, ProviderType } from './ai';
 import { codeExecutor } from './docker';
 
 /**
@@ -92,13 +101,12 @@ ipcMain.handle('ai-init', (_, provider: ProviderType, apiKey: string) => {
  * IPC handler to generate a problem
  *
  * @param _ - IPC event (unused)
- * @param type - Problem type
- * @param difficulty - Difficulty level (1-5)
- * @param context - Optional conversation context
+ * @param progress - Student's current progress
+ * @param problemIndex - Current problem number (1-5)
  * @returns Semi's response with message and/or problem
  */
-ipcMain.handle('ai-generate-problem', async (_, type: ProblemType, difficulty: number, context?: Message[]) => {
-  return aiAdapter.generateProblem(type, difficulty, context);
+ipcMain.handle('ai-generate-problem', async (_, progress: StudentProgress, problemIndex: number) => {
+  return aiAdapter.generateProblem(progress, problemIndex);
 });
 
 /**
@@ -134,6 +142,45 @@ ipcMain.handle('docker-execute', async (_, code: string, input: string) => {
  */
 ipcMain.handle('docker-test', async (_, code: string, testCases: { input: string; expected: string }[]) => {
   return codeExecutor.runTestCases(code, testCases);
+});
+
+/**
+ * IPC handler to get student progress
+ *
+ * @returns Student progress with history
+ */
+ipcMain.handle('get-student-progress', () => {
+  return getStudentProgress();
+});
+
+/**
+ * IPC handler to save student progress
+ *
+ * @param _ - IPC event (unused)
+ * @param progress - Updated progress data
+ */
+ipcMain.handle('save-student-progress', (_, progress: StudentProgress) => {
+  saveStudentProgress(progress);
+});
+
+/**
+ * IPC handler to save a problem record
+ *
+ * @param _ - IPC event (unused)
+ * @param progressId - Student progress ID
+ * @param record - Problem record to save
+ */
+ipcMain.handle('save-problem-record', (_, progressId: number, record: ProblemRecord) => {
+  saveProblemRecord(progressId, record);
+});
+
+/**
+ * IPC handler to reset student progress for a new test
+ *
+ * @returns New student progress
+ */
+ipcMain.handle('reset-student-progress', () => {
+  return resetStudentProgress();
 });
 
 app.whenReady().then(async () => {

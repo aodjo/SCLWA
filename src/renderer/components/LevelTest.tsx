@@ -5,7 +5,14 @@ import ProblemPanel from './ProblemPanel';
 import EditorPanel from './EditorPanel';
 import ChatPanel from './ChatPanel';
 import ResultPanel from './ResultPanel';
-import { Problem as BaseProblem, ProblemType, TestResult } from '../types/electron.d.ts';
+import {
+  Problem as BaseProblem,
+  ProblemType,
+  TestResult,
+  StudentProgress,
+  ProblemRecord,
+  ChatMessage,
+} from '../types/electron.d.ts';
 
 export interface Problem extends BaseProblem {
   id: number;
@@ -20,7 +27,6 @@ interface ProblemResult {
 }
 
 const TOTAL_PROBLEMS = 5;
-const PROBLEM_TYPES: ProblemType[] = ['fill-blank', 'predict-output', 'find-bug', 'multiple-choice', 'fill-blank'];
 
 /**
  * Level test component for evaluating user's C programming skills
@@ -31,18 +37,22 @@ export default function LevelTest() {
   const { t } = useTranslation();
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [progress, setProgress] = useState<StudentProgress | null>(null);
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState('');
   const [predictAnswer, setPredictAnswer] = useState('');
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [hintsUsed, setHintsUsed] = useState(0);
   const [results, setResults] = useState<ProblemResult[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const showEditor = currentProblem?.attachments?.editable === true;
+  const showEditor = !!currentProblem?.code;
+  const isEditable = currentProblem?.attachments?.editable === true;
+  const isRunnable = currentProblem?.attachments?.runnable === true;
+  const currentIndex = progress?.history.length ?? 0;
   const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
 
   /**
@@ -64,7 +74,11 @@ export default function LevelTest() {
       }
 
       await window.electronAPI.aiInit(enabledConfig.provider, enabledConfig.apiKey);
-      await generateProblem(0);
+
+      const newProgress = await window.electronAPI.resetStudentProgress();
+      setProgress(newProgress);
+
+      await generateProblem(newProgress);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start test');
       setLoading(false);
@@ -72,19 +86,23 @@ export default function LevelTest() {
   };
 
   /**
-   * Generates a problem for the given index
+   * Generates a problem using current progress
    *
-   * @param index - Problem index (0-4)
+   * @param currentProgress - Student's current progress
    */
-  const generateProblem = async (index: number) => {
+  const generateProblem = async (currentProgress: StudentProgress) => {
     setLoading(true);
     setError(null);
 
     try {
-      const type = PROBLEM_TYPES[index];
-      const difficulty = Math.min(index + 1, 5);
+      const problemIndex = currentProgress.history.length + 1;
+      const response = await window.electronAPI.aiGenerateProblem(currentProgress, problemIndex);
 
-      const response = await window.electronAPI.aiGenerateProblem(type, difficulty, messages);
+      if (response.studentSummary) {
+        const updatedProgress = { ...currentProgress, studentSummary: response.studentSummary };
+        setProgress(updatedProgress);
+        await window.electronAPI.saveStudentProgress(updatedProgress);
+      }
 
       if (response.message) {
         setMessages((prev) => [...prev, { role: 'assistant', content: response.message! }]);
@@ -92,10 +110,12 @@ export default function LevelTest() {
 
       if (response.problem) {
         const problem = response.problem;
-        setCurrentProblem({ ...problem, id: index + 1 });
-        setCode(problem.attachments?.editable ? problem.code || '' : '');
+        setCurrentProblem({ ...problem, id: problemIndex });
+        setCode(problem.code || '');
         setPredictAnswer('');
         setSelectedChoice(null);
+        setHintsUsed(0);
+        setMessages([]);
       } else {
         throw new Error('No problem generated');
       }
@@ -110,7 +130,7 @@ export default function LevelTest() {
    * Passes (skips) the current problem
    */
   const passCurrentProblem = async () => {
-    if (!currentProblem || submitting) return;
+    if (!currentProblem || !progress || submitting) return;
 
     setSubmitting(true);
 
@@ -122,12 +142,34 @@ export default function LevelTest() {
 
     setResults((prev) => [...prev, problemResult]);
 
-    if (currentIndex + 1 >= TOTAL_PROBLEMS) {
+    const record: ProblemRecord = {
+      id: currentProblem.id,
+      type: currentProblem.type,
+      difficulty: currentProblem.difficulty,
+      question: currentProblem.question,
+      code: currentProblem.code,
+      correct: false,
+      userAnswer: '',
+      hintsUsed,
+      chatLog: messages,
+    };
+
+    await window.electronAPI.saveProblemRecord(progress.id, record);
+
+    const updatedProgress: StudentProgress = {
+      ...progress,
+      totalProblems: progress.totalProblems + 1,
+      history: [...progress.history, record],
+    };
+
+    setProgress(updatedProgress);
+    await window.electronAPI.saveStudentProgress(updatedProgress);
+
+    if (updatedProgress.history.length >= TOTAL_PROBLEMS) {
       setFinished(true);
       setSubmitting(false);
     } else {
-      setCurrentIndex((prev) => prev + 1);
-      await generateProblem(currentIndex + 1);
+      await generateProblem(updatedProgress);
       setSubmitting(false);
     }
   };
@@ -136,7 +178,7 @@ export default function LevelTest() {
    * Submits the current answer for grading
    */
   const submitAnswer = async () => {
-    if (!currentProblem || submitting) return;
+    if (!currentProblem || !progress || submitting) return;
 
     setSubmitting(true);
     setError(null);
@@ -147,21 +189,16 @@ export default function LevelTest() {
 
       const { attachments } = currentProblem;
 
-      // Choice-based grading (multiple choice or fill-blank with choices)
       if (attachments?.choices && attachments.choices.length > 0) {
         userAnswer = String(selectedChoice);
         correct = selectedChoice === currentProblem.answer;
-      }
-      // Code-based grading (editable code with test cases)
-      else if (attachments?.editable) {
+      } else if (attachments?.editable) {
         userAnswer = code;
         if (currentProblem.testCases && currentProblem.testCases.length > 0) {
           const result: TestResult = await window.electronAPI.dockerTest(code, currentProblem.testCases);
           correct = result.allPassed;
         }
-      }
-      // Predict output (text input)
-      else if (currentProblem.type === 'predict-output') {
+      } else if (currentProblem.type === 'predict-output') {
         userAnswer = predictAnswer;
         const execResult = await window.electronAPI.dockerExecute(currentProblem.code || '', '');
         correct = execResult.success && execResult.output.trim() === predictAnswer.trim();
@@ -175,11 +212,34 @@ export default function LevelTest() {
 
       setResults((prev) => [...prev, problemResult]);
 
-      if (currentIndex + 1 >= TOTAL_PROBLEMS) {
+      const record: ProblemRecord = {
+        id: currentProblem.id,
+        type: currentProblem.type,
+        difficulty: currentProblem.difficulty,
+        question: currentProblem.question,
+        code: currentProblem.code,
+        correct,
+        userAnswer,
+        hintsUsed,
+        chatLog: messages,
+      };
+
+      await window.electronAPI.saveProblemRecord(progress.id, record);
+
+      const updatedProgress: StudentProgress = {
+        ...progress,
+        totalProblems: progress.totalProblems + 1,
+        totalCorrect: progress.totalCorrect + (correct ? 1 : 0),
+        history: [...progress.history, record],
+      };
+
+      setProgress(updatedProgress);
+      await window.electronAPI.saveStudentProgress(updatedProgress);
+
+      if (updatedProgress.history.length >= TOTAL_PROBLEMS) {
         setFinished(true);
       } else {
-        setCurrentIndex((prev) => prev + 1);
-        await generateProblem(currentIndex + 1);
+        await generateProblem(updatedProgress);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit answer');
@@ -196,21 +256,19 @@ export default function LevelTest() {
   const handleSendMessage = async (message: string) => {
     if (!currentProblem) return;
 
-    const newMessages: { role: 'user' | 'assistant'; content: string }[] = [
-      ...messages,
-      { role: 'user', content: message },
-    ];
+    const newMessages: ChatMessage[] = [...messages, { role: 'user', content: message }];
     setMessages(newMessages);
+    setHintsUsed((prev) => prev + 1);
 
     try {
-      const systemMessage = {
-        role: 'system' as const,
-        content: `당신은 C 프로그래밍 튜터입니다. 현재 학생이 다음 문제를 풀고 있습니다:
+      const systemMessage: ChatMessage = {
+        role: 'system',
+        content: `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다. 현재 학생이 다음 문제를 풀고 있습니다:
 문제 유형: ${currentProblem.type}
 문제: ${currentProblem.question}
 ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
 
-힌트를 제공하되, 직접적인 답은 알려주지 마세요.`,
+힌트를 제공하되, 직접적인 답은 알려주지 마세요. 친근하고 격려하는 말투로 대화하세요.`,
       };
 
       const response = await window.electronAPI.aiChat([
@@ -220,10 +278,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
 
       setMessages((prev) => [...prev, { role: 'assistant', content: response }]);
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: '죄송해요, 오류가 발생했어요.' },
-      ]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: '죄송해요, 오류가 발생했어요.' }]);
     }
   };
 
@@ -233,12 +288,13 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
   const restartTest = () => {
     setStarted(false);
     setLoading(false);
-    setCurrentIndex(0);
+    setProgress(null);
     setCurrentProblem(null);
     setCode('');
     setPredictAnswer('');
     setSelectedChoice(null);
     setMessages([]);
+    setHintsUsed(0);
     setResults([]);
     setSubmitting(false);
     setFinished(false);
@@ -313,7 +369,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
           <>
             <Panel defaultSize="33%" minSize="20%">
               <div className="h-full flex flex-col">
-                <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} onPass={passCurrentProblem} submitting={submitting} />
+                <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} onPass={passCurrentProblem} submitting={submitting} readonly={!isEditable} runnable={isRunnable} />
               </div>
             </Panel>
             <Separator className="resize-handle" />

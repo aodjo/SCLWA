@@ -13,6 +13,7 @@ export interface ProblemAttachments {
 
 export interface Problem {
   type: ProblemType;
+  difficulty: number;
   question: string;
   code?: string;
   attachments?: ProblemAttachments;
@@ -26,12 +27,33 @@ export interface Message {
   content: string;
 }
 
+export interface ProblemRecord {
+  id: number;
+  type: ProblemType;
+  difficulty: number;
+  question: string;
+  code?: string;
+  correct: boolean;
+  userAnswer: string;
+  hintsUsed: number;
+  chatLog: Message[];
+}
+
+export interface StudentProgress {
+  id: number;
+  studentSummary: string;
+  totalProblems: number;
+  totalCorrect: number;
+  history: ProblemRecord[];
+}
+
 /**
- * Response from Semi that can include both a message and a problem
+ * Response from Semi that can include message, problem, and student analysis
  */
 export interface SemiResponse {
   message?: string;
   problem?: Problem;
+  studentSummary?: string;
 }
 
 /**
@@ -39,14 +61,13 @@ export interface SemiResponse {
  */
 export interface AIProvider {
   /**
-   * Generates a problem with optional message using function calling
+   * Generates a problem based on student progress
    *
-   * @param type - Type of problem to generate
-   * @param difficulty - Difficulty level (1-5)
-   * @param context - Optional conversation context
-   * @returns Promise resolving to Semi's response (message + problem)
+   * @param progress - Student's current progress and history
+   * @param problemIndex - Current problem number (1-5)
+   * @returns Promise resolving to Semi's response
    */
-  generateProblem(type: ProblemType, difficulty: number, context?: Message[]): Promise<SemiResponse>;
+  generateProblem(progress: StudentProgress, problemIndex: number): Promise<SemiResponse>;
 
   /**
    * Sends chat messages and gets AI response

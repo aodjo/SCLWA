@@ -13,6 +13,7 @@ export interface ProblemAttachments {
 
 export interface Problem {
   type: ProblemType;
+  difficulty: number;
   question: string;
   code?: string;
   attachments?: ProblemAttachments;
@@ -24,6 +25,26 @@ export interface Problem {
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+}
+
+export interface ProblemRecord {
+  id: number;
+  type: ProblemType;
+  difficulty: number;
+  question: string;
+  code?: string;
+  correct: boolean;
+  userAnswer: string;
+  hintsUsed: number;
+  chatLog: ChatMessage[];
+}
+
+export interface StudentProgress {
+  id: number;
+  studentSummary: string;
+  totalProblems: number;
+  totalCorrect: number;
+  history: ProblemRecord[];
 }
 
 export interface ExecutionResult {
@@ -49,6 +70,7 @@ export interface TestResult {
 export interface SemiResponse {
   message?: string;
   problem?: Problem;
+  studentSummary?: string;
 }
 
 export interface ElectronAPI {
@@ -63,8 +85,14 @@ export interface ElectronAPI {
 
   // AI
   aiInit: (provider: string, apiKey: string) => Promise<boolean>;
-  aiGenerateProblem: (type: ProblemType, difficulty: number, context?: ChatMessage[]) => Promise<SemiResponse>;
+  aiGenerateProblem: (progress: StudentProgress, problemIndex: number) => Promise<SemiResponse>;
   aiChat: (messages: ChatMessage[]) => Promise<string>;
+
+  // Student Progress
+  getStudentProgress: () => Promise<StudentProgress>;
+  saveStudentProgress: (progress: StudentProgress) => Promise<void>;
+  saveProblemRecord: (progressId: number, record: ProblemRecord) => Promise<void>;
+  resetStudentProgress: () => Promise<StudentProgress>;
 
   // Docker
   dockerExecute: (code: string, input: string) => Promise<ExecutionResult>;

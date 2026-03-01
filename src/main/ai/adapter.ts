@@ -1,4 +1,4 @@
-import { AIProvider, Message, ProblemType, SemiResponse } from './types';
+import { AIProvider, Message, StudentProgress, SemiResponse } from './types';
 import { OpenAIProvider } from './providers/openai';
 
 export type ProviderType = 'openai' | 'gemini' | 'claude';
@@ -45,16 +45,15 @@ export class AIAdapter {
   /**
    * Generates a problem using the active provider
    *
-   * @param type - Type of problem to generate
-   * @param difficulty - Difficulty level (1-5)
-   * @param context - Optional conversation context
+   * @param progress - Student's current progress
+   * @param problemIndex - Current problem number (1-5)
    * @returns Promise resolving to Semi's response
    */
-  async generateProblem(type: ProblemType, difficulty: number, context?: Message[]): Promise<SemiResponse> {
+  async generateProblem(progress: StudentProgress, problemIndex: number): Promise<SemiResponse> {
     if (!this.provider) {
       throw new Error('No AI provider set');
     }
-    return this.provider.generateProblem(type, difficulty, context);
+    return this.provider.generateProblem(progress, problemIndex);
   }
 
   /**

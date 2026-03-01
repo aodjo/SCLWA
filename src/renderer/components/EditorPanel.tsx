@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import Editor from '@monaco-editor/react';
+import Editor, { OnMount } from '@monaco-editor/react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
+import type { editor } from 'monaco-editor';
 
 const C_STANDARDS = ['C17', 'C11', 'C99'] as const;
+const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor\):\(([^)]+)\)\]\]/g;
 
 interface EditorPanelProps {
   code: string;
@@ -11,6 +13,8 @@ interface EditorPanelProps {
   onSubmit?: () => void;
   onPass?: () => void;
   submitting?: boolean;
+  readonly?: boolean;
+  runnable?: boolean;
 }
 
 /**
@@ -22,13 +26,64 @@ interface EditorPanelProps {
  * @param submitting - Whether submission is in progress
  * @returns Editor panel component
  */
-export default function EditorPanel({ code, onChange, onSubmit, onPass, submitting }: EditorPanelProps) {
+export default function EditorPanel({ code, onChange, onSubmit, onPass, submitting, readonly, runnable = true }: EditorPanelProps) {
   const { t } = useTranslation();
   const [output, setOutput] = useState<string>('');
   const [running, setRunning] = useState(false);
   const [standard, setStandard] = useState<typeof C_STANDARDS[number]>('C17');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
+
+  /**
+   * Applies guide-anchor decorations to the editor
+   */
+  const applyGuideAnchorDecorations = useCallback(() => {
+    if (!editorRef.current) return;
+
+    const model = editorRef.current.getModel();
+    if (!model) return;
+
+    const text = model.getValue();
+    const decorations: editor.IModelDeltaDecoration[] = [];
+
+    let match;
+    while ((match = GUIDE_ANCHOR_REGEX.exec(text)) !== null) {
+      const startPos = model.getPositionAt(match.index);
+      const endPos = model.getPositionAt(match.index + match[0].length);
+
+      decorations.push({
+        range: {
+          startLineNumber: startPos.lineNumber,
+          startColumn: startPos.column,
+          endLineNumber: endPos.lineNumber,
+          endColumn: endPos.column,
+        },
+        options: {
+          inlineClassName: 'guide-anchor-decoration',
+          hoverMessage: { value: '클릭하여 코드를 입력하세요' },
+        },
+      });
+    }
+
+    if (decorationsRef.current) {
+      decorationsRef.current.clear();
+    }
+    decorationsRef.current = editorRef.current.createDecorationsCollection(decorations);
+  }, []);
+
+  /**
+   * Handles Monaco editor mount event
+   */
+  const handleEditorMount: OnMount = useCallback((editor) => {
+    editorRef.current = editor;
+    applyGuideAnchorDecorations();
+
+    editor.onDidChangeModelContent(() => {
+      applyGuideAnchorDecorations();
+    });
+  }, [applyGuideAnchorDecorations]);
 
   useEffect(() => {
     /**
@@ -108,19 +163,23 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            onClick={handleReset}
-            className="px-3 py-1 text-sm bg-zinc-700 text-zinc-300 rounded hover:bg-zinc-600 transition-colors cursor-pointer"
-          >
-            {t('editor.reset')}
-          </button>
-          <button
-            onClick={handleRun}
-            disabled={running}
-            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {running ? t('editor.running') : t('editor.run')}
-          </button>
+          {!readonly && (
+            <button
+              onClick={handleReset}
+              className="px-3 py-1 text-sm bg-zinc-700 text-zinc-300 rounded hover:bg-zinc-600 transition-colors cursor-pointer"
+            >
+              {t('editor.reset')}
+            </button>
+          )}
+          {runnable && (
+            <button
+              onClick={handleRun}
+              disabled={running}
+              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {running ? t('editor.running') : t('editor.run')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -133,6 +192,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
               theme="vs-dark"
               value={code}
               onChange={(value) => onChange(value ?? '')}
+              onMount={handleEditorMount}
               options={{
                 fontSize: 14,
                 fontFamily: 'Consolas, Monaco, monospace',
@@ -142,6 +202,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
                 lineNumbers: 'on',
                 renderLineHighlight: 'line',
                 automaticLayout: true,
+                readOnly: readonly,
               }}
             />
           </div>
@@ -161,24 +222,26 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
               </pre>
             </div>
 
-            <div className="p-2 border-t border-zinc-700 flex justify-end gap-2">
-              {onPass && (
+            {!readonly && (
+              <div className="p-2 border-t border-zinc-700 flex justify-end gap-2">
+                {onPass && (
+                  <button
+                    onClick={onPass}
+                    disabled={submitting}
+                    className="px-4 py-1.5 text-sm bg-zinc-600 text-white rounded hover:bg-zinc-500 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {t('editor.pass')}
+                  </button>
+                )}
                 <button
-                  onClick={onPass}
+                  onClick={onSubmit}
                   disabled={submitting}
-                  className="px-4 py-1.5 text-sm bg-zinc-600 text-white rounded hover:bg-zinc-500 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  {t('editor.pass')}
+                  {submitting ? t('editor.submitting') : t('editor.submit')}
                 </button>
-              )}
-              <button
-                onClick={onSubmit}
-                disabled={submitting}
-                className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {submitting ? t('editor.submitting') : t('editor.submit')}
-              </button>
-            </div>
+              </div>
+            )}
           </div>
         </Panel>
       </Group>

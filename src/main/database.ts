@@ -76,6 +76,35 @@ export async function initDatabase(): Promise<void> {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS student_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_summary TEXT DEFAULT '',
+      total_problems INTEGER DEFAULT 0,
+      total_correct INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS problem_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      progress_id INTEGER,
+      problem_index INTEGER,
+      type TEXT,
+      difficulty INTEGER,
+      question TEXT,
+      code TEXT,
+      correct INTEGER,
+      user_answer TEXT,
+      hints_used INTEGER DEFAULT 0,
+      chat_log TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (progress_id) REFERENCES student_progress(id)
+    )
+  `);
+
   saveDatabase();
 }
 
@@ -135,6 +164,169 @@ export function saveAIConfig(provider: string, apiKey: string, enabled: boolean)
   );
 
   saveDatabase();
+}
+
+interface ProblemRecord {
+  id: number;
+  type: string;
+  difficulty: number;
+  question: string;
+  code?: string;
+  correct: boolean;
+  userAnswer: string;
+  hintsUsed: number;
+  chatLog: { role: string; content: string }[];
+}
+
+interface StudentProgress {
+  id: number;
+  studentSummary: string;
+  totalProblems: number;
+  totalCorrect: number;
+  history: ProblemRecord[];
+}
+
+/**
+ * Gets or creates student progress record
+ *
+ * @returns Student progress with history
+ */
+export function getStudentProgress(): StudentProgress {
+  if (!db) throw new Error('Database not initialized');
+
+  const progressStmt = db.prepare('SELECT * FROM student_progress ORDER BY id DESC LIMIT 1');
+  let progress: StudentProgress;
+
+  if (progressStmt.step()) {
+    const row = progressStmt.getAsObject() as {
+      id: number;
+      student_summary: string;
+      total_problems: number;
+      total_correct: number;
+    };
+    progress = {
+      id: row.id,
+      studentSummary: row.student_summary || '',
+      totalProblems: row.total_problems,
+      totalCorrect: row.total_correct,
+      history: [],
+    };
+  } else {
+    db.run('INSERT INTO student_progress (student_summary) VALUES ("")');
+    const result = db.exec('SELECT last_insert_rowid() as id');
+    progress = {
+      id: result[0].values[0][0] as number,
+      studentSummary: '',
+      totalProblems: 0,
+      totalCorrect: 0,
+      history: [],
+    };
+    saveDatabase();
+  }
+  progressStmt.free();
+
+  const historyStmt = db.prepare(
+    'SELECT * FROM problem_history WHERE progress_id = ? ORDER BY problem_index'
+  );
+  historyStmt.bind([progress.id]);
+
+  while (historyStmt.step()) {
+    const row = historyStmt.getAsObject() as {
+      id: number;
+      type: string;
+      difficulty: number;
+      question: string;
+      code: string | null;
+      correct: number;
+      user_answer: string;
+      hints_used: number;
+      chat_log: string | null;
+    };
+    progress.history.push({
+      id: row.id,
+      type: row.type,
+      difficulty: row.difficulty,
+      question: row.question,
+      code: row.code || undefined,
+      correct: row.correct === 1,
+      userAnswer: row.user_answer,
+      hintsUsed: row.hints_used,
+      chatLog: row.chat_log ? JSON.parse(row.chat_log) : [],
+    });
+  }
+  historyStmt.free();
+
+  return progress;
+}
+
+/**
+ * Updates student progress summary and stats
+ *
+ * @param progress - Updated progress data
+ */
+export function saveStudentProgress(progress: StudentProgress): void {
+  if (!db) throw new Error('Database not initialized');
+
+  db.run(
+    `UPDATE student_progress
+     SET student_summary = ?, total_problems = ?, total_correct = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [progress.studentSummary, progress.totalProblems, progress.totalCorrect, progress.id]
+  );
+
+  saveDatabase();
+}
+
+/**
+ * Saves a problem record to history
+ *
+ * @param progressId - Student progress ID
+ * @param record - Problem record to save
+ */
+export function saveProblemRecord(progressId: number, record: ProblemRecord): void {
+  if (!db) throw new Error('Database not initialized');
+
+  db.run(
+    `INSERT INTO problem_history
+     (progress_id, problem_index, type, difficulty, question, code, correct, user_answer, hints_used, chat_log)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      progressId,
+      record.id,
+      record.type,
+      record.difficulty,
+      record.question,
+      record.code || null,
+      record.correct ? 1 : 0,
+      record.userAnswer,
+      record.hintsUsed,
+      JSON.stringify(record.chatLog),
+    ]
+  );
+
+  saveDatabase();
+}
+
+/**
+ * Resets student progress for a new test
+ *
+ * @returns New progress ID
+ */
+export function resetStudentProgress(): StudentProgress {
+  if (!db) throw new Error('Database not initialized');
+
+  db.run('INSERT INTO student_progress (student_summary) VALUES ("")');
+  const result = db.exec('SELECT last_insert_rowid() as id');
+
+  saveDatabase();
+
+  return {
+    id: result[0].values[0][0] as number,
+    studentSummary: '',
+    totalProblems: 0,
+    totalCorrect: 0,
+    history: [],
+  };
 }
 
 /**

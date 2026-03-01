@@ -49,13 +49,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * Generates a problem using AI
    *
-   * @param type - Problem type
-   * @param difficulty - Difficulty level (1-5)
-   * @param context - Optional conversation context
+   * @param progress - Student's current progress
+   * @param problemIndex - Current problem number (1-5)
    * @returns Promise resolving to Semi's response
    */
-  aiGenerateProblem: (type: string, difficulty: number, context?: { role: string; content: string }[]) =>
-    ipcRenderer.invoke('ai-generate-problem', type, difficulty, context),
+  aiGenerateProblem: (progress: unknown, problemIndex: number) =>
+    ipcRenderer.invoke('ai-generate-problem', progress, problemIndex),
 
   /**
    * Sends chat messages to AI
@@ -85,4 +84,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   dockerTest: (code: string, testCases: { input: string; expected: string }[]) =>
     ipcRenderer.invoke('docker-test', code, testCases),
+
+  /**
+   * Gets student progress from database
+   *
+   * @returns Promise resolving to student progress with history
+   */
+  getStudentProgress: () => ipcRenderer.invoke('get-student-progress'),
+
+  /**
+   * Saves student progress to database
+   *
+   * @param progress - Student progress to save
+   * @returns Promise resolving when saved
+   */
+  saveStudentProgress: (progress: unknown) => ipcRenderer.invoke('save-student-progress', progress),
+
+  /**
+   * Saves a problem record to history
+   *
+   * @param progressId - Student progress ID
+   * @param record - Problem record to save
+   * @returns Promise resolving when saved
+   */
+  saveProblemRecord: (progressId: number, record: unknown) =>
+    ipcRenderer.invoke('save-problem-record', progressId, record),
+
+  /**
+   * Resets student progress for a new test
+   *
+   * @returns Promise resolving to new student progress
+   */
+  resetStudentProgress: () => ipcRenderer.invoke('reset-student-progress'),
 });

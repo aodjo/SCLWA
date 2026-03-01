@@ -65,11 +65,6 @@ export default function ProblemPanel({
           <p className="text-zinc-800 font-medium">{problem.question}</p>
         </div>
 
-        {problem.code && !isEditable && (
-          <pre className="bg-white border border-zinc-200 rounded-md p-4 text-sm font-mono text-zinc-800 overflow-x-auto mb-4">
-            {problem.code}
-          </pre>
-        )}
 
         {choices && choices.length > 0 && (
           <div className="flex flex-col gap-2">
