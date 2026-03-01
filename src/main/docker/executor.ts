@@ -1,9 +1,16 @@
 import Docker from 'dockerode';
+import { Duplex } from 'stream';
 import { ExecutionResult, TestCaseResult, TestResult } from './types';
 
 const DOCKER_IMAGE = 'gcc:latest';
 const EXECUTION_TIMEOUT = 10000; // 10 seconds
 const MEMORY_LIMIT = 128 * 1024 * 1024; // 128MB
+
+export interface InteractiveCallbacks {
+  onStdout: (data: string) => void;
+  onStderr: (data: string) => void;
+  onExit: (code: number) => void;
+}
 
 /**
  * Docker-based C code executor
@@ -12,6 +19,7 @@ export class CodeExecutor {
   private docker: Docker;
   private imageReady: boolean = false;
   private runningContainer: Docker.Container | null = null;
+  private interactiveStream: Duplex | null = null;
 
   constructor() {
     this.docker = new Docker();
@@ -28,10 +36,126 @@ export class CodeExecutor {
     try {
       await this.runningContainer.kill();
       this.runningContainer = null;
+      this.interactiveStream = null;
       return true;
     } catch {
       this.runningContainer = null;
+      this.interactiveStream = null;
       return false;
+    }
+  }
+
+  /**
+   * Writes data to the stdin of the running interactive container
+   *
+   * @param data - Data to write to stdin
+   */
+  writeStdin(data: string): void {
+    if (this.interactiveStream) {
+      this.interactiveStream.write(data);
+    }
+  }
+
+  /**
+   * Executes C code in interactive mode with PTY
+   *
+   * @param code - C source code to execute
+   * @param callbacks - Callbacks for stdout, stderr, and exit events
+   * @returns Compilation result (success or error message)
+   */
+  async executeInteractive(
+    code: string,
+    callbacks: InteractiveCallbacks
+  ): Promise<{ success: boolean; error?: string }> {
+    await this.ensureImage();
+
+    const script = `
+cat > /tmp/main.c << 'CCODE'
+${code}
+CCODE
+gcc /tmp/main.c -o /tmp/main 2>&1
+if [ $? -eq 0 ]; then
+  echo '---COMPILE_SUCCESS---'
+  /tmp/main
+else
+  exit 1
+fi
+`;
+
+    try {
+      const container = await this.docker.createContainer({
+        Image: DOCKER_IMAGE,
+        Cmd: ['bash', '-c', script],
+        AttachStdin: true,
+        AttachStdout: true,
+        AttachStderr: true,
+        Tty: true,
+        OpenStdin: true,
+        StdinOnce: false,
+        NetworkDisabled: true,
+        HostConfig: {
+          Memory: MEMORY_LIMIT,
+          MemorySwap: MEMORY_LIMIT,
+          CpuPeriod: 100000,
+          CpuQuota: 50000,
+        },
+      });
+
+      this.runningContainer = container;
+
+      const stream = await container.attach({
+        stream: true,
+        stdin: true,
+        stdout: true,
+        stderr: true,
+      });
+
+      this.interactiveStream = stream;
+
+      let compilePhase = true;
+      let compileOutput = '';
+
+      stream.on('data', (chunk: Buffer) => {
+        const text = chunk.toString('utf8');
+
+        if (compilePhase) {
+          if (text.includes('---COMPILE_SUCCESS---')) {
+            compilePhase = false;
+            const parts = text.split('---COMPILE_SUCCESS---');
+            if (parts[0]) compileOutput += parts[0];
+            if (parts[1]) callbacks.onStdout(parts[1]);
+          } else {
+            compileOutput += text;
+          }
+        } else {
+          callbacks.onStdout(text);
+        }
+      });
+
+      stream.on('error', (err: Error) => {
+        callbacks.onStderr(err.message);
+      });
+
+      await container.start();
+
+      container.wait((err: Error | null, data: { StatusCode: number }) => {
+        this.runningContainer = null;
+        this.interactiveStream = null;
+
+        if (compilePhase && compileOutput.trim()) {
+          callbacks.onStderr(compileOutput.trim());
+        }
+
+        callbacks.onExit(err ? 1 : data.StatusCode);
+        container.remove().catch(() => {});
+      });
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
   }
 

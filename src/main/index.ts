@@ -154,6 +154,32 @@ ipcMain.handle('docker-stop', async () => {
 });
 
 /**
+ * IPC handler to start interactive code execution
+ *
+ * @param event - IPC event with sender for streaming responses
+ * @param code - C source code
+ * @returns Initial execution result
+ */
+ipcMain.handle('docker-execute-interactive', async (event, code: string) => {
+  const sender = event.sender;
+  return codeExecutor.executeInteractive(code, {
+    onStdout: (data) => sender.send('docker-stdout', data),
+    onStderr: (data) => sender.send('docker-stderr', data),
+    onExit: (exitCode) => sender.send('docker-exit', exitCode),
+  });
+});
+
+/**
+ * IPC handler to write to stdin of running container
+ *
+ * @param _ - IPC event (unused)
+ * @param data - Data to write to stdin
+ */
+ipcMain.on('docker-stdin', (_, data: string) => {
+  codeExecutor.writeStdin(data);
+});
+
+/**
  * IPC handler to get student progress
  *
  * @returns Student progress with history

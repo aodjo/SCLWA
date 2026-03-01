@@ -93,6 +93,58 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dockerStop: () => ipcRenderer.invoke('docker-stop'),
 
   /**
+   * Starts interactive code execution with PTY
+   *
+   * @param code - C source code
+   * @returns Promise resolving to execution start result
+   */
+  dockerExecuteInteractive: (code: string) =>
+    ipcRenderer.invoke('docker-execute-interactive', code),
+
+  /**
+   * Writes data to stdin of running container
+   *
+   * @param data - Data to write
+   */
+  dockerStdin: (data: string) => ipcRenderer.send('docker-stdin', data),
+
+  /**
+   * Registers callback for stdout data
+   *
+   * @param callback - Function to call with stdout data
+   * @returns Cleanup function to remove listener
+   */
+  onDockerStdout: (callback: (data: string) => void) => {
+    const handler = (_: unknown, data: string) => callback(data);
+    ipcRenderer.on('docker-stdout', handler);
+    return () => ipcRenderer.removeListener('docker-stdout', handler);
+  },
+
+  /**
+   * Registers callback for stderr data
+   *
+   * @param callback - Function to call with stderr data
+   * @returns Cleanup function to remove listener
+   */
+  onDockerStderr: (callback: (data: string) => void) => {
+    const handler = (_: unknown, data: string) => callback(data);
+    ipcRenderer.on('docker-stderr', handler);
+    return () => ipcRenderer.removeListener('docker-stderr', handler);
+  },
+
+  /**
+   * Registers callback for process exit
+   *
+   * @param callback - Function to call with exit code
+   * @returns Cleanup function to remove listener
+   */
+  onDockerExit: (callback: (code: number) => void) => {
+    const handler = (_: unknown, code: number) => callback(code);
+    ipcRenderer.on('docker-exit', handler);
+    return () => ipcRenderer.removeListener('docker-exit', handler);
+  },
+
+  /**
    * Gets student progress from database
    *
    * @returns Promise resolving to student progress with history

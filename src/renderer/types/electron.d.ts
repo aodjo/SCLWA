@@ -98,6 +98,11 @@ export interface ElectronAPI {
   dockerExecute: (code: string, input: string) => Promise<ExecutionResult>;
   dockerTest: (code: string, testCases: TestCase[]) => Promise<TestResult>;
   dockerStop: () => Promise<boolean>;
+  dockerExecuteInteractive: (code: string) => Promise<{ success: boolean; error?: string }>;
+  dockerStdin: (data: string) => void;
+  onDockerStdout: (callback: (data: string) => void) => () => void;
+  onDockerStderr: (callback: (data: string) => void) => () => void;
+  onDockerExit: (callback: (code: number) => void) => () => void;
 }
 
 declare global {

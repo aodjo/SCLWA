@@ -4,14 +4,10 @@ import Editor, { OnMount } from '@monaco-editor/react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { editor } from 'monaco-editor';
 import tomorrowNight from '../themes/tomorrow-night.json';
+import Terminal, { TerminalHandle } from './Terminal';
 
 const C_STANDARDS = ['C17', 'C11', 'C99'] as const;
 const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor\):\(([^)]+)\)\]\]/g;
-
-interface OutputLine {
-  type: 'system' | 'content';
-  text: string;
-}
 
 interface EditorPanelProps {
   code: string;
@@ -34,13 +30,13 @@ interface EditorPanelProps {
  */
 export default function EditorPanel({ code, onChange, onSubmit, onPass, submitting, readonly, runnable = true }: EditorPanelProps) {
   const { t } = useTranslation();
-  const [outputLines, setOutputLines] = useState<OutputLine[]>([]);
   const [running, setRunning] = useState(false);
   const [standard, setStandard] = useState<typeof C_STANDARDS[number]>('C17');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
+  const terminalRef = useRef<TerminalHandle>(null);
 
   /**
    * Applies guide-anchor decorations to the editor
@@ -137,9 +133,6 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
   }, [applyGuideAnchorDecorations]);
 
   useEffect(() => {
-    /**
-     * Closes dropdown when clicking outside
-     */
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
@@ -149,12 +142,33 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const cleanupStdout = window.electronAPI.onDockerStdout((data) => {
+      terminalRef.current?.write(data);
+    });
+
+    const cleanupStderr = window.electronAPI.onDockerStderr((data) => {
+      terminalRef.current?.write(`\x1b[31m${data}\x1b[0m`);
+    });
+
+    const cleanupExit = window.electronAPI.onDockerExit((exitCode) => {
+      terminalRef.current?.writeln(`\r\n\x1b[36m${t('editor.processEnded')} (${exitCode})\x1b[0m`);
+      setRunning(false);
+    });
+
+    return () => {
+      cleanupStdout();
+      cleanupStderr();
+      cleanupExit();
+    };
+  }, [t]);
+
   /**
    * Resets the code editor to empty state
    */
   const handleReset = () => {
     onChange('');
-    setOutputLines([]);
+    terminalRef.current?.clear();
   };
 
   /**
@@ -165,30 +179,19 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
   };
 
   /**
-   * Runs the code and displays output
+   * Runs the code in interactive mode
    */
   const handleRun = async () => {
     setRunning(true);
-    setOutputLines([{ type: 'system', text: t('editor.processStarted') }]);
+    terminalRef.current?.clear();
+    terminalRef.current?.writeln(`\x1b[36m${t('editor.processStarted')}\x1b[0m`);
+    terminalRef.current?.focus();
 
-    try {
-      const cleanCode = stripGuideAnchors(code);
-      const result = await window.electronAPI.dockerExecute(cleanCode, '');
-      const content = result.success
-        ? (result.output || t('editor.noOutput'))
-        : (result.error || t('editor.error'));
-      setOutputLines([
-        { type: 'system', text: t('editor.processStarted') },
-        { type: 'content', text: content },
-        { type: 'system', text: t('editor.processEnded') },
-      ]);
-    } catch (err) {
-      setOutputLines([
-        { type: 'system', text: t('editor.processStarted') },
-        { type: 'content', text: t('editor.error') },
-        { type: 'system', text: t('editor.processEnded') },
-      ]);
-    } finally {
+    const cleanCode = stripGuideAnchors(code);
+    const result = await window.electronAPI.dockerExecuteInteractive(cleanCode);
+
+    if (!result.success) {
+      terminalRef.current?.writeln(`\x1b[31m${result.error}\x1b[0m`);
       setRunning(false);
     }
   };
@@ -199,8 +202,17 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
   const handleStop = async () => {
     await window.electronAPI.dockerStop();
     setRunning(false);
-    setOutputLines([{ type: 'system', text: t('editor.stopped') }]);
+    terminalRef.current?.writeln(`\r\n\x1b[33m${t('editor.stopped')}\x1b[0m`);
   };
+
+  /**
+   * Handles terminal input and sends to docker stdin
+   */
+  const handleTerminalInput = useCallback((data: string) => {
+    if (running) {
+      window.electronAPI.dockerStdin(data);
+    }
+  }, [running]);
 
   return (
     <div className="flex-1 flex flex-col bg-zinc-900">
@@ -301,19 +313,8 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
               <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
             </div>
 
-            <div className="flex-1 p-4 overflow-y-auto overflow-x-hidden bg-zinc-800">
-              <pre className="text-sm whitespace-pre-wrap break-all" style={{ fontFamily: 'Pretendard' }}>
-                {outputLines.length > 0 ? (
-                  outputLines.map((line, i) => (
-                    <span key={i} className={line.type === 'system' ? 'text-sky-600' : 'text-zinc-300'}>
-                      {line.text}
-                      {i < outputLines.length - 1 && '\n'}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-zinc-600">{t('editor.outputPlaceholder')}</span>
-                )}
-              </pre>
+            <div className="flex-1 bg-zinc-800">
+              <Terminal ref={terminalRef} onData={handleTerminalInput} />
             </div>
 
             {!readonly && (
