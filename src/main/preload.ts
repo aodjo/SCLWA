@@ -51,10 +51,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
    *
    * @param type - Problem type
    * @param difficulty - Difficulty level (1-5)
-   * @returns Promise resolving to generated problem
+   * @param context - Optional conversation context
+   * @returns Promise resolving to Semi's response
    */
-  aiGenerateProblem: (type: string, difficulty: number) =>
-    ipcRenderer.invoke('ai-generate-problem', type, difficulty),
+  aiGenerateProblem: (type: string, difficulty: number, context?: { role: string; content: string }[]) =>
+    ipcRenderer.invoke('ai-generate-problem', type, difficulty, context),
 
   /**
    * Sends chat messages to AI

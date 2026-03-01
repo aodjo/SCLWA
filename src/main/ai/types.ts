@@ -5,38 +5,21 @@ export interface TestCase {
   expected: string;
 }
 
-export interface BaseProblem {
+export interface ProblemAttachments {
+  editable?: boolean;
+  runnable?: boolean;
+  choices?: string[];
+}
+
+export interface Problem {
   type: ProblemType;
   question: string;
   code?: string;
+  attachments?: ProblemAttachments;
+  answer?: number;
+  testCases?: TestCase[];
+  solutionCode?: string;
 }
-
-export interface FillBlankProblem extends BaseProblem {
-  type: 'fill-blank';
-  code: string;
-  testCases: TestCase[];
-  solutionCode: string;
-}
-
-export interface PredictOutputProblem extends BaseProblem {
-  type: 'predict-output';
-  code: string;
-}
-
-export interface FindBugProblem extends BaseProblem {
-  type: 'find-bug';
-  code: string;
-  testCases: TestCase[];
-  solutionCode: string;
-}
-
-export interface MultipleChoiceProblem extends BaseProblem {
-  type: 'multiple-choice';
-  choices: string[];
-  answer: number;
-}
-
-export type Problem = FillBlankProblem | PredictOutputProblem | FindBugProblem | MultipleChoiceProblem;
 
 export interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -44,17 +27,26 @@ export interface Message {
 }
 
 /**
+ * Response from Semi that can include both a message and a problem
+ */
+export interface SemiResponse {
+  message?: string;
+  problem?: Problem;
+}
+
+/**
  * Common interface for AI providers
  */
 export interface AIProvider {
   /**
-   * Generates a problem of specified type and difficulty
+   * Generates a problem with optional message using function calling
    *
    * @param type - Type of problem to generate
    * @param difficulty - Difficulty level (1-5)
-   * @returns Promise resolving to generated problem
+   * @param context - Optional conversation context
+   * @returns Promise resolving to Semi's response (message + problem)
    */
-  generateProblem(type: ProblemType, difficulty: number): Promise<Problem>;
+  generateProblem(type: ProblemType, difficulty: number, context?: Message[]): Promise<SemiResponse>;
 
   /**
    * Sends chat messages and gets AI response

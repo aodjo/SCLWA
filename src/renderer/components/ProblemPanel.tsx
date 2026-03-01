@@ -44,7 +44,10 @@ export default function ProblemPanel({
     );
   }
 
-  const showAnswerInput = problem.type === 'predict-output' || problem.type === 'multiple-choice';
+  const { attachments } = problem;
+  const choices = attachments?.choices;
+  const isEditable = attachments?.editable;
+  const showAnswerInput = choices || problem.type === 'predict-output' || !isEditable;
 
   return (
     <div className="flex-1 flex flex-col bg-white">
@@ -62,15 +65,15 @@ export default function ProblemPanel({
           <p className="text-zinc-800 font-medium">{problem.question}</p>
         </div>
 
-        {problem.code && problem.type !== 'fill-blank' && problem.type !== 'find-bug' && (
+        {problem.code && !isEditable && (
           <pre className="bg-white border border-zinc-200 rounded-md p-4 text-sm font-mono text-zinc-800 overflow-x-auto mb-4">
             {problem.code}
           </pre>
         )}
 
-        {problem.choices && (
+        {choices && choices.length > 0 && (
           <div className="flex flex-col gap-2">
-            {problem.choices.map((choice, index) => (
+            {choices.map((choice, index) => (
               <button
                 key={index}
                 onClick={() => onSelectChoice?.(index)}
@@ -94,7 +97,7 @@ export default function ProblemPanel({
             <span className="text-sm font-medium text-zinc-700">{t('problem.answerLabel')}</span>
           </div>
 
-          {problem.type === 'predict-output' && (
+          {problem.type === 'predict-output' && !choices && (
             <div className="p-4">
               <input
                 type="text"
@@ -118,7 +121,7 @@ export default function ProblemPanel({
             )}
             <button
               onClick={onSubmit}
-              disabled={submitting || (problem.type === 'multiple-choice' && selectedChoice === null)}
+              disabled={submitting || (choices && choices.length > 0 && selectedChoice === null)}
               className="flex-1 bg-zinc-800 text-white rounded-md py-2 text-sm font-medium hover:bg-zinc-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? t('problem.submitting') : t('problem.submit')}

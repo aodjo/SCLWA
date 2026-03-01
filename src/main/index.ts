@@ -94,10 +94,11 @@ ipcMain.handle('ai-init', (_, provider: ProviderType, apiKey: string) => {
  * @param _ - IPC event (unused)
  * @param type - Problem type
  * @param difficulty - Difficulty level (1-5)
- * @returns Generated problem
+ * @param context - Optional conversation context
+ * @returns Semi's response with message and/or problem
  */
-ipcMain.handle('ai-generate-problem', async (_, type: ProblemType, difficulty: number) => {
-  return aiAdapter.generateProblem(type, difficulty);
+ipcMain.handle('ai-generate-problem', async (_, type: ProblemType, difficulty: number, context?: Message[]) => {
+  return aiAdapter.generateProblem(type, difficulty, context);
 });
 
 /**

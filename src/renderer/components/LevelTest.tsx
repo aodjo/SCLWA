@@ -21,7 +21,6 @@ interface ProblemResult {
 
 const TOTAL_PROBLEMS = 5;
 const PROBLEM_TYPES: ProblemType[] = ['fill-blank', 'predict-output', 'find-bug', 'multiple-choice', 'fill-blank'];
-const CODE_PROBLEM_TYPES: ProblemType[] = ['fill-blank', 'find-bug'];
 
 /**
  * Level test component for evaluating user's C programming skills
@@ -43,7 +42,7 @@ export default function LevelTest() {
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const showEditor = currentProblem && CODE_PROBLEM_TYPES.includes(currentProblem.type);
+  const showEditor = currentProblem?.attachments?.editable === true;
   const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
 
   /**
@@ -85,13 +84,21 @@ export default function LevelTest() {
       const type = PROBLEM_TYPES[index];
       const difficulty = Math.min(index + 1, 5);
 
-      const problem = await window.electronAPI.aiGenerateProblem(type, difficulty);
+      const response = await window.electronAPI.aiGenerateProblem(type, difficulty, messages);
 
-      setCurrentProblem({ ...problem, id: index + 1 });
-      setCode(problem.type === 'fill-blank' || problem.type === 'find-bug' ? problem.code || '' : '');
-      setPredictAnswer('');
-      setSelectedChoice(null);
-      setMessages([]);
+      if (response.message) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: response.message! }]);
+      }
+
+      if (response.problem) {
+        const problem = response.problem;
+        setCurrentProblem({ ...problem, id: index + 1 });
+        setCode(problem.attachments?.editable ? problem.code || '' : '');
+        setPredictAnswer('');
+        setSelectedChoice(null);
+      } else {
+        throw new Error('No problem generated');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate problem');
     } finally {
@@ -138,29 +145,26 @@ export default function LevelTest() {
       let correct = false;
       let userAnswer = '';
 
-      switch (currentProblem.type) {
-        case 'fill-blank':
-        case 'find-bug': {
-          userAnswer = code;
-          if (currentProblem.testCases && currentProblem.testCases.length > 0) {
-            const result: TestResult = await window.electronAPI.dockerTest(code, currentProblem.testCases);
-            correct = result.allPassed;
-          }
-          break;
-        }
+      const { attachments } = currentProblem;
 
-        case 'predict-output': {
-          userAnswer = predictAnswer;
-          const execResult = await window.electronAPI.dockerExecute(currentProblem.code || '', '');
-          correct = execResult.success && execResult.output.trim() === predictAnswer.trim();
-          break;
+      // Choice-based grading (multiple choice or fill-blank with choices)
+      if (attachments?.choices && attachments.choices.length > 0) {
+        userAnswer = String(selectedChoice);
+        correct = selectedChoice === currentProblem.answer;
+      }
+      // Code-based grading (editable code with test cases)
+      else if (attachments?.editable) {
+        userAnswer = code;
+        if (currentProblem.testCases && currentProblem.testCases.length > 0) {
+          const result: TestResult = await window.electronAPI.dockerTest(code, currentProblem.testCases);
+          correct = result.allPassed;
         }
-
-        case 'multiple-choice': {
-          userAnswer = String(selectedChoice);
-          correct = selectedChoice === currentProblem.answer;
-          break;
-        }
+      }
+      // Predict output (text input)
+      else if (currentProblem.type === 'predict-output') {
+        userAnswer = predictAnswer;
+        const execResult = await window.electronAPI.dockerExecute(currentProblem.code || '', '');
+        correct = execResult.success && execResult.output.trim() === predictAnswer.trim();
       }
 
       const problemResult: ProblemResult = {

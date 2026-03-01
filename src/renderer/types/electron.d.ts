@@ -5,11 +5,17 @@ export interface TestCase {
   expected: string;
 }
 
+export interface ProblemAttachments {
+  editable?: boolean;
+  runnable?: boolean;
+  choices?: string[];
+}
+
 export interface Problem {
   type: ProblemType;
   question: string;
   code?: string;
-  choices?: string[];
+  attachments?: ProblemAttachments;
   answer?: number;
   testCases?: TestCase[];
   solutionCode?: string;
@@ -40,6 +46,11 @@ export interface TestResult {
   compilationError?: string;
 }
 
+export interface SemiResponse {
+  message?: string;
+  problem?: Problem;
+}
+
 export interface ElectronAPI {
   // Window controls
   minimize: () => void;
@@ -52,7 +63,7 @@ export interface ElectronAPI {
 
   // AI
   aiInit: (provider: string, apiKey: string) => Promise<boolean>;
-  aiGenerateProblem: (type: ProblemType, difficulty: number) => Promise<Problem>;
+  aiGenerateProblem: (type: ProblemType, difficulty: number, context?: ChatMessage[]) => Promise<SemiResponse>;
   aiChat: (messages: ChatMessage[]) => Promise<string>;
 
   // Docker
