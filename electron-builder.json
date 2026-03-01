@@ -1,0 +1,19 @@
+{
+  "appId": "com.sclwa.app",
+  "productName": "SCLWA",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "win": {
+    "target": "nsis"
+  },
+  "mac": {
+    "target": "dmg"
+  },
+  "linux": {
+    "target": "AppImage"
+  }
+}

@@ -5,3 +5,5 @@ TODO.md
 temps/
 dumps/
 CLAUDE.md
+node_modules
+dist/
