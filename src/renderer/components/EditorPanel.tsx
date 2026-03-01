@@ -324,7 +324,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, onNext, 
               <Terminal ref={terminalRef} onData={handleTerminalInput} />
             </div>
 
-            {!readonly && (
+            {(waitingForNext || !readonly) && (
               <div className="p-2 border-t border-zinc-700 flex justify-end gap-2">
                 {waitingForNext ? (
                   <button

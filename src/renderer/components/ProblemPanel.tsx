@@ -90,13 +90,15 @@ export default function ProblemPanel({
         )}
       </div>
 
-      {showAnswerInput && (
+      {(showAnswerInput || waitingForNext) && (
         <div className="border-t border-zinc-200">
-          <div className="px-4 py-2 bg-zinc-100 border-b border-zinc-200">
-            <span className="text-sm font-medium text-zinc-700">{t('problem.answerLabel')}</span>
-          </div>
+          {showAnswerInput && !waitingForNext && (
+            <div className="px-4 py-2 bg-zinc-100 border-b border-zinc-200">
+              <span className="text-sm font-medium text-zinc-700">{t('problem.answerLabel')}</span>
+            </div>
+          )}
 
-          {problem.type === 'predict-output' && !choices && (
+          {problem.type === 'predict-output' && !choices && !waitingForNext && (
             <div className="p-4">
               <input
                 type="text"
@@ -108,7 +110,7 @@ export default function ProblemPanel({
             </div>
           )}
 
-          <div className="p-4 pt-0 flex gap-2">
+          <div className={`p-4 ${!waitingForNext && (showAnswerInput || problem.type === 'predict-output') ? 'pt-0' : ''} flex gap-2`}>
             {waitingForNext ? (
               <button
                 onClick={onNext}
