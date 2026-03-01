@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import Editor from '@monaco-editor/react';
 
 interface EditorPanelProps {
   code: string;
@@ -6,7 +7,7 @@ interface EditorPanelProps {
 }
 
 /**
- * Code editor panel with textarea (to be replaced with Monaco)
+ * Code editor panel with Monaco Editor
  *
  * @param code - Current code content
  * @param onChange - Callback when code changes
@@ -21,12 +22,23 @@ export default function EditorPanel({ code, onChange }: EditorPanelProps) {
         <span className="text-sm text-zinc-400">{t('editor.title')}</span>
       </div>
 
-      <div className="flex-1 p-4">
-        <textarea
+      <div className="flex-1">
+        <Editor
+          height="100%"
+          defaultLanguage="c"
+          theme="vs-dark"
           value={code}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={t('editor.placeholder')}
-          className="w-full h-full bg-zinc-900 border border-zinc-800 rounded-md p-4 text-sm font-mono text-zinc-300 resize-none outline-none focus:border-zinc-700 placeholder:text-zinc-600"
+          onChange={(value) => onChange(value ?? '')}
+          options={{
+            fontSize: 14,
+            fontFamily: 'Consolas, Monaco, monospace',
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            padding: { top: 16 },
+            lineNumbers: 'on',
+            renderLineHighlight: 'line',
+            automaticLayout: true,
+          }}
         />
       </div>
 
