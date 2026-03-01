@@ -10,7 +10,7 @@ export default {
   },
   levelTest: {
     title: '레벨 테스트',
-    description: 'AI가 5개의 문제를 출제할게요.\n실력에 맞는 학습을 시작하기 위한 테스트예요.',
+    description: '세미가 5개의 문제를 출제할게요.\n실력에 맞는 학습을 시작하기 위한 테스트예요.',
     startButton: '테스트 시작',
     generating: '문제를 생성하고 있어요...',
     noApiKey: 'API 키가 설정되지 않았어요. 설정에서 API 키를 입력해주세요.',
