@@ -173,12 +173,37 @@ gcc /tmp/main.c -o /tmp/main 2>&1 && echo '---COMPILE_SUCCESS---' && echo '${inp
             stdout: true,
             stderr: true,
           });
-          resolve(logs.toString('utf8'));
+          resolve(this.demuxDockerStream(logs));
         } catch (logErr) {
           reject(logErr);
         }
       });
     });
+  }
+
+  /**
+   * Demultiplexes Docker stream output by removing 8-byte headers
+   *
+   * @param buffer - Raw Docker logs buffer
+   * @returns Clean output string
+   */
+  private demuxDockerStream(buffer: Buffer): string {
+    const chunks: Buffer[] = [];
+    let offset = 0;
+
+    while (offset < buffer.length) {
+      if (offset + 8 > buffer.length) break;
+
+      const size = buffer.readUInt32BE(offset + 4);
+      offset += 8;
+
+      if (offset + size > buffer.length) break;
+
+      chunks.push(buffer.subarray(offset, offset + size));
+      offset += size;
+    }
+
+    return Buffer.concat(chunks).toString('utf8');
   }
 }
 
