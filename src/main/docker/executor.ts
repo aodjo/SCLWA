@@ -132,7 +132,8 @@ fi
               compilePhase = false;
               const parts = payload.split('---COMPILE_SUCCESS---');
               if (parts[0]) compileOutput += parts[0];
-              if (parts[1]) callbacks.onStdout(parts[1]);
+              const afterCompile = parts[1]?.replace(/^\r?\n/, '');
+              if (afterCompile) callbacks.onStdout(afterCompile);
             } else {
               compileOutput += payload;
             }
