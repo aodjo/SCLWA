@@ -39,7 +39,9 @@ export default function Settings({ onComplete }: SettingsProps) {
         setConfigs((prev) =>
           prev.map((config) => {
             const saved = savedConfigs.find((s) => s.provider === config.provider);
-            return saved ? { ...config, ...saved } : config;
+            return saved
+              ? { provider: config.provider, apiKey: saved.apiKey, enabled: saved.enabled }
+              : config;
           })
         );
       }
@@ -171,7 +173,7 @@ export default function Settings({ onComplete }: SettingsProps) {
         <button
           disabled={!canProceed}
           onClick={onComplete}
-          className="w-full bg-zinc-50 text-zinc-950 rounded-md py-3 text-sm font-medium hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-zinc-50 text-zinc-950 rounded-md py-3 text-sm font-medium hover:bg-zinc-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           시작하기
         </button>
