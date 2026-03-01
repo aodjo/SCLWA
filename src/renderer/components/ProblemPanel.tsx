@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Problem } from './LevelTest';
 
 interface ProblemPanelProps {
@@ -11,30 +12,25 @@ interface ProblemPanelProps {
  * @returns Problem panel component
  */
 export default function ProblemPanel({ problem }: ProblemPanelProps) {
+  const { t } = useTranslation();
+
   if (!problem) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <p className="text-zinc-500">문제를 불러오고 있어요...</p>
+        <p className="text-zinc-500">{t('problem.loading')}</p>
       </div>
     );
   }
-
-  const typeLabels: Record<string, string> = {
-    'fill-blank': '빈칸 채우기',
-    'predict-output': '출력값 예상',
-    'find-bug': '버그 찾기',
-    'multiple-choice': '객관식',
-  };
 
   return (
     <div className="flex-1 flex flex-col">
       <div className="p-4 border-b border-zinc-800">
         <div className="flex items-center gap-2">
           <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded">
-            {typeLabels[problem.type]}
+            {t(`problem.types.${problem.type}`)}
           </span>
           <span className="text-xs text-zinc-500">
-            문제 {problem.id} / 5
+            {t('problem.progress', { current: problem.id, total: 5 })}
           </span>
         </div>
       </div>

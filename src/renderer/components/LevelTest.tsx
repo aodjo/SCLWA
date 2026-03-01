@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ProblemPanel from './ProblemPanel';
 import EditorPanel from './EditorPanel';
 import ChatPanel from './ChatPanel';
@@ -23,6 +24,7 @@ const CODE_PROBLEM_TYPES: ProblemType[] = ['fill-blank', 'find-bug'];
  * @returns Level test component with problem, editor, and chat panels
  */
 export default function LevelTest() {
+  const { t } = useTranslation();
   const [started, setStarted] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState('');
@@ -34,17 +36,16 @@ export default function LevelTest() {
     return (
       <div className="min-h-[calc(100vh-2rem)] flex flex-col items-center justify-center gap-6">
         <div className="text-center">
-          <h1 className="text-4xl font-bold mb-3">레벨 테스트</h1>
-          <p className="text-zinc-500">
-            AI가 5개의 문제를 출제할게요.<br />
-            실력에 맞는 학습을 시작하기 위한 테스트예요.
+          <h1 className="text-4xl font-bold mb-3">{t('levelTest.title')}</h1>
+          <p className="text-zinc-500 whitespace-pre-line">
+            {t('levelTest.description')}
           </p>
         </div>
         <button
           onClick={() => setStarted(true)}
           className="bg-zinc-50 text-zinc-950 rounded-md px-6 py-3 font-medium hover:bg-zinc-200 transition-colors cursor-pointer"
         >
-          테스트 시작
+          {t('levelTest.startButton')}
         </button>
       </div>
     );

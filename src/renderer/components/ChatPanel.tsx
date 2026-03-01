@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BiSend } from 'react-icons/bi';
 
 interface Message {
@@ -19,6 +20,7 @@ interface ChatPanelProps {
  * @returns Chat panel component
  */
 export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
+  const { t } = useTranslation();
   const [input, setInput] = useState('');
 
   /**
@@ -36,13 +38,13 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
   return (
     <div className="flex-1 flex flex-col">
       <div className="p-4 border-b border-zinc-800">
-        <span className="text-sm text-zinc-400">AI 채팅</span>
+        <span className="text-sm text-zinc-400">{t('chat.title')}</span>
       </div>
 
       <div className="flex-1 p-4 overflow-auto">
         {messages.length === 0 ? (
           <p className="text-zinc-600 text-sm">
-            질문이 있으면 물어봐요!
+            {t('chat.emptyMessage')}
           </p>
         ) : (
           <div className="flex flex-col gap-4">
@@ -72,7 +74,7 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="메시지를 입력해주세요..."
+            placeholder={t('chat.placeholder')}
             className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-50 outline-none focus:border-zinc-700 placeholder:text-zinc-600"
           />
           <button
