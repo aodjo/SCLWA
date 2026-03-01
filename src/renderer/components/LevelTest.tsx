@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { Group, Panel, Separator } from 'react-resizable-panels';
 import ProblemPanel from './ProblemPanel';
 import EditorPanel from './EditorPanel';
 import ChatPanel from './ChatPanel';
@@ -261,34 +261,40 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
 
   return (
     <div className="h-[calc(100vh-2rem)]">
-      <PanelGroup direction="horizontal">
-        <Panel defaultSize={showEditor ? 33 : 50} minSize={20}>
-          <ProblemPanel
-            problem={currentProblem}
-            selectedChoice={selectedChoice}
-            onSelectChoice={setSelectedChoice}
-            predictAnswer={predictAnswer}
-            onPredictAnswerChange={setPredictAnswer}
-            onSubmit={submitAnswer}
-            submitting={submitting}
-          />
+      <Group orientation="horizontal" className="h-full">
+        <Panel defaultSize={showEditor ? '33%' : '50%'} minSize="20%">
+          <div className="h-full flex flex-col">
+            <ProblemPanel
+              problem={currentProblem}
+              selectedChoice={selectedChoice}
+              onSelectChoice={setSelectedChoice}
+              predictAnswer={predictAnswer}
+              onPredictAnswerChange={setPredictAnswer}
+              onSubmit={submitAnswer}
+              submitting={submitting}
+            />
+          </div>
         </Panel>
 
-        <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-zinc-600 transition-colors cursor-col-resize" />
+        <Separator className="resize-handle" />
 
         {showEditor && (
           <>
-            <Panel defaultSize={33} minSize={20}>
-              <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} submitting={submitting} />
+            <Panel defaultSize="33%" minSize="20%">
+              <div className="h-full flex flex-col">
+                <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} submitting={submitting} />
+              </div>
             </Panel>
-            <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-zinc-600 transition-colors cursor-col-resize" />
+            <Separator className="resize-handle" />
           </>
         )}
 
-        <Panel defaultSize={showEditor ? 33 : 50} minSize={20}>
-          <ChatPanel messages={messages} onSendMessage={handleSendMessage} />
+        <Panel defaultSize={showEditor ? '34%' : '50%'} minSize="20%">
+          <div className="h-full flex flex-col">
+            <ChatPanel messages={messages} onSendMessage={handleSendMessage} />
+          </div>
         </Panel>
-      </PanelGroup>
+      </Group>
     </div>
   );
 }

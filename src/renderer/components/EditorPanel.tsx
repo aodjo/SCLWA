@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Editor from '@monaco-editor/react';
+import { Group, Panel, Separator } from 'react-resizable-panels';
 
 interface EditorPanelProps {
   code: string;
@@ -80,47 +81,55 @@ export default function EditorPanel({ code, onChange, onSubmit, submitting }: Ed
         </div>
       </div>
 
-      <div className="flex-1">
-        <Editor
-          height="100%"
-          defaultLanguage="c"
-          theme="vs-dark"
-          value={code}
-          onChange={(value) => onChange(value ?? '')}
-          options={{
-            fontSize: 14,
-            fontFamily: 'Consolas, Monaco, monospace',
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            padding: { top: 16 },
-            lineNumbers: 'on',
-            renderLineHighlight: 'line',
-            automaticLayout: true,
-          }}
-        />
-      </div>
+      <Group orientation="vertical" className="flex-1">
+        <Panel defaultSize="70%" minSize="30%">
+          <div className="h-full">
+            <Editor
+              height="100%"
+              defaultLanguage="c"
+              theme="vs-dark"
+              value={code}
+              onChange={(value) => onChange(value ?? '')}
+              options={{
+                fontSize: 14,
+                fontFamily: 'Consolas, Monaco, monospace',
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                padding: { top: 16 },
+                lineNumbers: 'on',
+                renderLineHighlight: 'line',
+                automaticLayout: true,
+              }}
+            />
+          </div>
+        </Panel>
 
-      <div className="border-t border-zinc-700">
-        <div className="px-4 py-2 bg-zinc-800 border-b border-zinc-700">
-          <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
-        </div>
+        <Separator className="resize-handle-horizontal" />
 
-        <div className="h-32 p-4 overflow-auto bg-zinc-950">
-          <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap">
-            {output || <span className="text-zinc-600">{t('editor.outputPlaceholder')}</span>}
-          </pre>
-        </div>
+        <Panel defaultSize="30%" minSize="15%">
+          <div className="h-full flex flex-col">
+            <div className="px-4 py-2 bg-zinc-800 border-b border-zinc-700">
+              <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
+            </div>
 
-        <div className="p-2 border-t border-zinc-700 flex justify-end">
-          <button
-            onClick={onSubmit}
-            disabled={submitting}
-            className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {submitting ? t('editor.submitting') : t('editor.submit')}
-          </button>
-        </div>
-      </div>
+            <div className="flex-1 p-4 overflow-auto bg-zinc-950">
+              <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap">
+                {output || <span className="text-zinc-600">{t('editor.outputPlaceholder')}</span>}
+              </pre>
+            </div>
+
+            <div className="p-2 border-t border-zinc-700 flex justify-end">
+              <button
+                onClick={onSubmit}
+                disabled={submitting}
+                className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {submitting ? t('editor.submitting') : t('editor.submit')}
+              </button>
+            </div>
+          </div>
+        </Panel>
+      </Group>
     </div>
   );
 }

@@ -5,3 +5,23 @@ body {
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
+
+/* Resizable panel separator - vertical */
+.resize-handle {
+  @apply bg-zinc-800 transition-colors;
+  width: 4px;
+}
+
+.resize-handle:hover {
+  @apply bg-zinc-600;
+}
+
+/* Resizable panel separator - horizontal */
+.resize-handle-horizontal {
+  @apply bg-zinc-700 transition-colors;
+  height: 4px;
+}
+
+.resize-handle-horizontal:hover {
+  @apply bg-zinc-500;
+}
