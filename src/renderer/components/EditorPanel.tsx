@@ -181,6 +181,15 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
     }
   };
 
+  /**
+   * Stops the currently running code execution
+   */
+  const handleStop = async () => {
+    await window.electronAPI.dockerStop();
+    setRunning(false);
+    setOutput(t('editor.stopped'));
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-zinc-900">
       <div className="flex items-center justify-between px-2 py-1 border-b border-zinc-700 bg-zinc-800">
@@ -226,13 +235,23 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
             </button>
           )}
           {runnable && (
-            <button
-              onClick={handleRun}
-              disabled={running}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {running ? t('editor.running') : t('editor.run')}
-            </button>
+            <>
+              {running ? (
+                <button
+                  onClick={handleStop}
+                  className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-500 transition-colors cursor-pointer"
+                >
+                  {t('editor.stop')}
+                </button>
+              ) : (
+                <button
+                  onClick={handleRun}
+                  className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors cursor-pointer"
+                >
+                  {t('editor.run')}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

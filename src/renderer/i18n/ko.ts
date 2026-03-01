@@ -31,6 +31,8 @@ export default {
     reset: '초기화',
     run: '실행',
     running: '실행 중...',
+    stop: '중지',
+    stopped: '실행이 중지되었어요',
     output: '실행 결과',
     outputPlaceholder: '코드를 실행하면 결과가 여기에 표시돼요',
     noOutput: '(출력 없음)',

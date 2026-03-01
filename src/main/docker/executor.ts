@@ -11,9 +11,28 @@ const MEMORY_LIMIT = 128 * 1024 * 1024; // 128MB
 export class CodeExecutor {
   private docker: Docker;
   private imageReady: boolean = false;
+  private runningContainer: Docker.Container | null = null;
 
   constructor() {
     this.docker = new Docker();
+  }
+
+  /**
+   * Stops the currently running container
+   *
+   * @returns true if container was stopped, false if no container running
+   */
+  async stop(): Promise<boolean> {
+    if (!this.runningContainer) return false;
+
+    try {
+      await this.runningContainer.kill();
+      this.runningContainer = null;
+      return true;
+    } catch {
+      this.runningContainer = null;
+      return false;
+    }
   }
 
   /**
@@ -73,9 +92,11 @@ gcc /tmp/main.c -o /tmp/main 2>&1 && echo '---COMPILE_SUCCESS---' && echo '${inp
         },
       });
 
+      this.runningContainer = container;
       await container.start();
 
       const output = await this.waitForContainer(container);
+      this.runningContainer = null;
 
       if (output.includes('---COMPILE_SUCCESS---')) {
         const parts = output.split('---COMPILE_SUCCESS---');

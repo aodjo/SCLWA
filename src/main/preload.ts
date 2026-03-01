@@ -86,6 +86,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('docker-test', code, testCases),
 
   /**
+   * Stops the currently running Docker container
+   *
+   * @returns Promise resolving to true if stopped, false if no container running
+   */
+  dockerStop: () => ipcRenderer.invoke('docker-stop'),
+
+  /**
    * Gets student progress from database
    *
    * @returns Promise resolving to student progress with history

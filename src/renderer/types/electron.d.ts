@@ -97,6 +97,7 @@ export interface ElectronAPI {
   // Docker
   dockerExecute: (code: string, input: string) => Promise<ExecutionResult>;
   dockerTest: (code: string, testCases: TestCase[]) => Promise<TestResult>;
+  dockerStop: () => Promise<boolean>;
 }
 
 declare global {

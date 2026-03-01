@@ -145,6 +145,15 @@ ipcMain.handle('docker-test', async (_, code: string, testCases: { input: string
 });
 
 /**
+ * IPC handler to stop running container
+ *
+ * @returns true if stopped, false if no container running
+ */
+ipcMain.handle('docker-stop', async () => {
+  return codeExecutor.stop();
+});
+
+/**
  * IPC handler to get student progress
  *
  * @returns Student progress with history
