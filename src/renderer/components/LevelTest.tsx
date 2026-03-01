@@ -5,7 +5,7 @@ import ProblemPanel from './ProblemPanel';
 import EditorPanel from './EditorPanel';
 import ChatPanel from './ChatPanel';
 import ResultPanel from './ResultPanel';
-import {
+import type {
   Problem as BaseProblem,
   ProblemType,
   TestResult,

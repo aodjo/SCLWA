@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { BiSend } from 'react-icons/bi';
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
@@ -44,7 +44,7 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
           </p>
         ) : (
           <div className="flex flex-col gap-4">
-            {messages.map((msg, index) => (
+            {messages.filter((msg) => msg.role !== 'system').map((msg, index) => (
               <div
                 key={index}
                 className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
