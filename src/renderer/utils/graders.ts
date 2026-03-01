@@ -89,6 +89,8 @@ export async function gradeWithTestCases(
 ): Promise<GradeResult> {
   const cleanCode = stripGuideAnchors(code);
 
+  console.log('[Grader] Code to test:', cleanCode);
+
   if (!testCases || testCases.length === 0) {
     console.log('[Grader] No test cases provided - cannot grade');
     return {
@@ -104,7 +106,17 @@ export async function gradeWithTestCases(
   const result: TestResult = await window.electronAPI.dockerTest(cleanCode, testCases);
   const correct = result.allPassed;
 
-  console.log('[Grader] Test cases:', { testCases, result, correct });
+  console.log('[Grader] Test cases result:', {
+    testCases,
+    allPassed: result.allPassed,
+    compilationError: result.compilationError,
+    // Show detailed comparison
+    comparisons: result.results?.map((r) => ({
+      expected: JSON.stringify(r.expected),
+      actual: JSON.stringify(r.actual),
+      passed: r.passed,
+    })),
+  });
 
   return {
     correct,

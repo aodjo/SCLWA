@@ -37,7 +37,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             properties: {
               editable: {
                 type: 'boolean',
-                description: '사용자가 코드를 수정할 수 있는지',
+                description: '사용자가 코드를 수정할 수 있는지 (true일 경우 testCases 필수)',
               },
               runnable: {
                 type: 'boolean',
@@ -49,22 +49,23 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
                 description: '선택지 (객관식인 경우)',
               },
             },
+            additionalProperties: false,
           },
           answer: {
             type: 'number',
-            description: '정답 (선택지 인덱스, 0부터 시작)',
+            description: '정답 (choices 사용시 선택지 인덱스, 0부터 시작)',
           },
           testCases: {
             type: 'array',
             items: {
               type: 'object',
               properties: {
-                input: { type: 'string' },
-                expected: { type: 'string' },
+                input: { type: 'string', description: '프로그램 입력값 (없으면 빈 문자열)' },
+                expected: { type: 'string', description: '예상 출력값' },
               },
               required: ['input', 'expected'],
             },
-            description: '테스트 케이스 (코드 채점용)',
+            description: 'editable: true일 때 필수. 코드 채점용 테스트 케이스. attachments 안이 아닌 여기에 배치!',
           },
           solutionCode: {
             type: 'string',
