@@ -27,6 +27,7 @@ export default function Settings({ onComplete }: SettingsProps) {
   );
   const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [hasSavedConfig, setHasSavedConfig] = useState(false);
 
   useEffect(() => {
     loadConfigs();
@@ -36,6 +37,8 @@ export default function Settings({ onComplete }: SettingsProps) {
     try {
       const savedConfigs = await window.electronAPI?.getAIConfigs();
       if (savedConfigs && savedConfigs.length > 0) {
+        const hasAnyEnabled = savedConfigs.some((s) => s.enabled && s.apiKey);
+        setHasSavedConfig(hasAnyEnabled);
         setConfigs((prev) =>
           prev.map((config) => {
             const saved = savedConfigs.find((s) => s.provider === config.provider);
@@ -97,7 +100,7 @@ export default function Settings({ onComplete }: SettingsProps) {
     <div className="min-h-[calc(100vh-2rem)] flex items-center justify-center p-8">
       <div className="w-full max-w-md">
         <h1 className="text-3xl font-bold text-center mb-2">SCLWA</h1>
-        <p className="text-zinc-500 text-center mb-8">AI를 선택하고 API 키를 입력해주세요</p>
+        <p className="text-zinc-500 text-center mb-8">어떤 AI와 함께 공부할까요?</p>
 
         <div className="flex flex-col gap-3 mb-6">
           {AI_PROVIDERS.map((provider) => {
@@ -158,7 +161,7 @@ export default function Settings({ onComplete }: SettingsProps) {
                       <button
                         onClick={() => toggleShowApiKey(provider.id)}
                         type="button"
-                        className="flex items-center justify-center bg-zinc-800 rounded-md px-3 text-zinc-500 text-lg hover:bg-zinc-700 hover:text-zinc-50 transition-all"
+                        className="flex items-center justify-center bg-zinc-800 rounded-md px-3 text-zinc-500 text-lg hover:bg-zinc-700 hover:text-zinc-50 transition-all cursor-pointer"
                       >
                         {showApiKey[provider.id] ? <BiHide /> : <BiShow />}
                       </button>
@@ -175,7 +178,7 @@ export default function Settings({ onComplete }: SettingsProps) {
           onClick={onComplete}
           className="w-full bg-zinc-50 text-zinc-950 rounded-md py-3 text-sm font-medium hover:bg-zinc-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          시작하기
+          {hasSavedConfig ? '저장하기' : '시작하기'}
         </button>
       </div>
     </div>
