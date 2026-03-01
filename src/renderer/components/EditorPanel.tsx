@@ -112,7 +112,7 @@ export default function EditorPanel({ code, onChange, onSubmit, submitting }: Ed
               <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
             </div>
 
-            <div className="flex-1 p-4 overflow-auto bg-zinc-950">
+            <div className="flex-1 p-4 overflow-auto bg-zinc-800">
               <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap">
                 {output || <span className="text-zinc-600">{t('editor.outputPlaceholder')}</span>}
               </pre>
