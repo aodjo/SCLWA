@@ -1,7 +1,6 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { Unicode11Addon } from '@xterm/addon-unicode11';
 import '@xterm/xterm/css/xterm.css';
 
 export interface TerminalHandle {
@@ -50,19 +49,15 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(({ onData }, ref) => 
         cursorAccent: '#27272a',
         selectionBackground: '#3f3f46',
       },
-      fontFamily: 'Consolas, "Courier New", monospace',
+      fontFamily: 'Consolas, monospace',
       fontSize: 14,
       letterSpacing: 0,
       cursorBlink: true,
       convertEol: true,
-      allowProposedApi: true,
     });
 
     const fitAddon = new FitAddon();
-    const unicode11Addon = new Unicode11Addon();
     terminal.loadAddon(fitAddon);
-    terminal.loadAddon(unicode11Addon);
-    terminal.unicode.activeVersion = '11';
 
     terminal.open(containerRef.current);
     fitAddon.fit();
