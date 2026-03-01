@@ -61,7 +61,7 @@ export default function LevelTest() {
   const [error, setError] = useState<string | null>(null);
 
   const showEditor = !!currentProblem?.code;
-  const isEditable = currentProblem?.attachments?.editable === true;
+  const isEditable = currentProblem?.attachments?.editable !== false;
   const isRunnable = currentProblem?.attachments?.runnable !== false;
   const currentIndex = progress?.history.length ?? 0;
   const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
@@ -108,6 +108,9 @@ export default function LevelTest() {
     try {
       const problemIndex = currentProgress.history.length + 1;
       const response = await window.electronAPI.aiGenerateProblem(currentProgress, problemIndex);
+
+      console.log('[LevelTest] Response:', response);
+      console.log('[LevelTest] Problem:', response.problem);
 
       if (response.studentSummary) {
         const updatedProgress = { ...currentProgress, studentSummary: response.studentSummary };

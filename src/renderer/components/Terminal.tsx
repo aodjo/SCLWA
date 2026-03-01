@@ -80,7 +80,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(({ onData }, ref) => 
     };
   }, []);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return <div ref={containerRef} className="h-full w-full p-2" />;
 });
 
 Terminal.displayName = 'Terminal';

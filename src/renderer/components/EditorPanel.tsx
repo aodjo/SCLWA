@@ -313,7 +313,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
               <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
             </div>
 
-            <div className="flex-1 bg-zinc-800">
+            <div className="flex-1 bg-zinc-800 overflow-hidden min-h-0">
               <Terminal ref={terminalRef} onData={handleTerminalInput} />
             </div>
 
