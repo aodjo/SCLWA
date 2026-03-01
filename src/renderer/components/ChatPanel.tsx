@@ -11,9 +11,21 @@ interface ChatPanelProps {
   onSendMessage: (message: string) => void;
 }
 
+/**
+ * AI chat panel for user-assistant conversations
+ *
+ * @param messages - Array of chat messages
+ * @param onSendMessage - Callback when user sends a message
+ * @returns Chat panel component
+ */
 export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
   const [input, setInput] = useState('');
 
+  /**
+   * Handles form submission for sending messages
+   *
+   * @param e - Form event
+   */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -23,12 +35,10 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
 
   return (
     <div className="flex-1 flex flex-col">
-      {/* 헤더 */}
       <div className="p-4 border-b border-zinc-800">
         <span className="text-sm text-zinc-400">AI 채팅</span>
       </div>
 
-      {/* 메시지 영역 */}
       <div className="flex-1 p-4 overflow-auto">
         {messages.length === 0 ? (
           <p className="text-zinc-600 text-sm">
@@ -56,7 +66,6 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
         )}
       </div>
 
-      {/* 입력 영역 */}
       <form onSubmit={handleSubmit} className="p-4 border-t border-zinc-800">
         <div className="flex gap-2">
           <input
@@ -68,7 +77,7 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
           />
           <button
             type="submit"
-            className="bg-zinc-800 rounded-md px-3 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-50 transition-colors"
+            className="bg-zinc-800 rounded-md px-3 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-50 transition-colors cursor-pointer"
           >
             <BiSend />
           </button>

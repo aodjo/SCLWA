@@ -14,9 +14,14 @@ export interface Problem {
   answer?: string;
 }
 
-// 코드 작성이 필요한 문제 유형
+/** Problem types that require code editor */
 const CODE_PROBLEM_TYPES: ProblemType[] = ['fill-blank', 'find-bug'];
 
+/**
+ * Level test component for evaluating user's C programming skills
+ *
+ * @returns Level test component with problem, editor, and chat panels
+ */
 export default function LevelTest() {
   const [started, setStarted] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
@@ -37,7 +42,7 @@ export default function LevelTest() {
         </div>
         <button
           onClick={() => setStarted(true)}
-          className="bg-zinc-50 text-zinc-950 rounded-md px-6 py-3 font-medium hover:bg-zinc-200 transition-colors"
+          className="bg-zinc-50 text-zinc-950 rounded-md px-6 py-3 font-medium hover:bg-zinc-200 transition-colors cursor-pointer"
         >
           테스트 시작
         </button>
@@ -47,19 +52,16 @@ export default function LevelTest() {
 
   return (
     <div className="h-[calc(100vh-2rem)] flex">
-      {/* 문제 패널 */}
       <div className={`${showEditor ? 'w-1/3' : 'w-1/2'} border-r border-zinc-800 flex flex-col`}>
         <ProblemPanel problem={currentProblem} />
       </div>
 
-      {/* 에디터 패널 - 코드 문제일 때만 표시 */}
       {showEditor && (
         <div className="w-1/3 border-r border-zinc-800 flex flex-col">
           <EditorPanel code={code} onChange={setCode} />
         </div>
       )}
 
-      {/* 채팅 패널 */}
       <div className={`${showEditor ? 'w-1/3' : 'w-1/2'} flex flex-col`}>
         <ChatPanel messages={messages} onSendMessage={() => {}} />
       </div>

@@ -4,6 +4,12 @@ interface ProblemPanelProps {
   problem: Problem | null;
 }
 
+/**
+ * Displays problem content with type label, question, code snippet, and choices
+ *
+ * @param problem - The problem object to display, or null if loading
+ * @returns Problem panel component
+ */
 export default function ProblemPanel({ problem }: ProblemPanelProps) {
   if (!problem) {
     return (
@@ -22,7 +28,6 @@ export default function ProblemPanel({ problem }: ProblemPanelProps) {
 
   return (
     <div className="flex-1 flex flex-col">
-      {/* 헤더 */}
       <div className="p-4 border-b border-zinc-800">
         <div className="flex items-center gap-2">
           <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded">
@@ -34,24 +39,21 @@ export default function ProblemPanel({ problem }: ProblemPanelProps) {
         </div>
       </div>
 
-      {/* 문제 내용 */}
       <div className="flex-1 p-4 overflow-auto">
         <p className="text-zinc-50 whitespace-pre-wrap mb-4">{problem.question}</p>
 
-        {/* 코드가 있는 경우 */}
         {problem.code && (
           <pre className="bg-zinc-900 border border-zinc-800 rounded-md p-4 text-sm font-mono text-zinc-300 overflow-x-auto">
             {problem.code}
           </pre>
         )}
 
-        {/* 객관식 선택지 */}
         {problem.choices && (
           <div className="mt-4 flex flex-col gap-2">
             {problem.choices.map((choice, index) => (
               <button
                 key={index}
-                className="text-left bg-zinc-900 border border-zinc-800 rounded-md p-3 text-sm hover:border-zinc-700 hover:bg-zinc-800/50 transition-colors"
+                className="text-left bg-zinc-900 border border-zinc-800 rounded-md p-3 text-sm hover:border-zinc-700 hover:bg-zinc-800/50 transition-colors cursor-pointer"
               >
                 <span className="text-zinc-500 mr-2">{index + 1}.</span>
                 {choice}

@@ -3,15 +3,20 @@ interface EditorPanelProps {
   onChange: (code: string) => void;
 }
 
+/**
+ * Code editor panel with textarea (to be replaced with Monaco)
+ *
+ * @param code - Current code content
+ * @param onChange - Callback when code changes
+ * @returns Editor panel component
+ */
 export default function EditorPanel({ code, onChange }: EditorPanelProps) {
   return (
     <div className="flex-1 flex flex-col">
-      {/* 헤더 */}
       <div className="p-4 border-b border-zinc-800">
         <span className="text-sm text-zinc-400">코드 에디터</span>
       </div>
 
-      {/* 에디터 영역 - 나중에 Monaco로 교체 */}
       <div className="flex-1 p-4">
         <textarea
           value={code}
@@ -21,9 +26,8 @@ export default function EditorPanel({ code, onChange }: EditorPanelProps) {
         />
       </div>
 
-      {/* 제출 버튼 */}
       <div className="p-4 border-t border-zinc-800">
-        <button className="w-full bg-zinc-50 text-zinc-950 rounded-md py-2 text-sm font-medium hover:bg-zinc-200 transition-colors">
+        <button className="w-full bg-zinc-50 text-zinc-950 rounded-md py-2 text-sm font-medium hover:bg-zinc-200 transition-colors cursor-pointer">
           제출
         </button>
       </div>

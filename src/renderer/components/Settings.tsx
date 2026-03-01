@@ -15,6 +15,12 @@ interface SettingsProps {
   onComplete: () => void;
 }
 
+/**
+ * Settings page for selecting AI provider and entering API keys
+ *
+ * @param onComplete - Callback when settings are complete
+ * @returns Settings component
+ */
 export default function Settings({ onComplete }: SettingsProps) {
   const [configs, setConfigs] = useState<AIConfig[]>(
     AI_PROVIDERS.map((p) => ({ provider: p.id, apiKey: '', enabled: false }))

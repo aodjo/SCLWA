@@ -5,6 +5,12 @@ interface TitleBarProps {
   onSettingsClick?: () => void;
 }
 
+/**
+ * Custom frameless window title bar with window controls
+ *
+ * @param onSettingsClick - Optional callback for settings button click
+ * @returns Title bar component with minimize, maximize, close buttons
+ */
 export default function TitleBar({ onSettingsClick }: TitleBarProps) {
   return (
     <div className="fixed top-0 left-0 right-0 h-8 bg-zinc-950 flex items-center justify-between select-none z-50">

@@ -6,7 +6,7 @@ import crypto from 'crypto';
 
 const DB_PATH = path.join(app.getPath('userData'), 'sclwa.db');
 
-// 암호화 키는 머신 고유값 기반으로 생성
+/** Encryption key generated from machine-specific path */
 const ENCRYPTION_KEY = crypto
   .createHash('sha256')
   .update(app.getPath('userData') + 'sclwa-secret-key')
@@ -14,6 +14,12 @@ const ENCRYPTION_KEY = crypto
 
 const IV_LENGTH = 16;
 
+/**
+ * Encrypts text using AES-256-GCM
+ *
+ * @param text - Plain text to encrypt
+ * @returns Base64 encoded encrypted string
+ */
 function encrypt(text: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
@@ -22,6 +28,12 @@ function encrypt(text: string): string {
   return Buffer.concat([iv, authTag, encrypted]).toString('base64');
 }
 
+/**
+ * Decrypts AES-256-GCM encrypted text
+ *
+ * @param encryptedText - Base64 encoded encrypted string
+ * @returns Decrypted plain text
+ */
 function decrypt(encryptedText: string): string {
   const buffer = Buffer.from(encryptedText, 'base64');
   const iv = buffer.subarray(0, IV_LENGTH);
@@ -34,10 +46,14 @@ function decrypt(encryptedText: string): string {
 
 let db: Database | null = null;
 
+/**
+ * Initializes SQLite database and creates tables if not exist
+ *
+ * @returns Promise that resolves when database is ready
+ */
 export async function initDatabase(): Promise<void> {
   const SQL = await initSqlJs();
 
-  // 기존 DB 파일이 있으면 로드
   if (fs.existsSync(DB_PATH)) {
     const fileBuffer = fs.readFileSync(DB_PATH);
     db = new SQL.Database(fileBuffer);
@@ -63,6 +79,9 @@ export async function initDatabase(): Promise<void> {
   saveDatabase();
 }
 
+/**
+ * Saves database to file
+ */
 function saveDatabase(): void {
   if (!db) return;
   const data = db.export();
@@ -70,6 +89,11 @@ function saveDatabase(): void {
   fs.writeFileSync(DB_PATH, buffer);
 }
 
+/**
+ * Retrieves all AI configurations from database
+ *
+ * @returns Array of AI config objects with decrypted API keys
+ */
 export function getAIConfigs(): { provider: string; apiKey: string; enabled: boolean }[] {
   if (!db) throw new Error('Database not initialized');
 
@@ -89,6 +113,13 @@ export function getAIConfigs(): { provider: string; apiKey: string; enabled: boo
   return rows;
 }
 
+/**
+ * Saves or updates AI configuration in database
+ *
+ * @param provider - AI provider identifier
+ * @param apiKey - API key (will be encrypted)
+ * @param enabled - Whether this provider is enabled
+ */
 export function saveAIConfig(provider: string, apiKey: string, enabled: boolean): void {
   if (!db) throw new Error('Database not initialized');
 
@@ -106,6 +137,9 @@ export function saveAIConfig(provider: string, apiKey: string, enabled: boolean)
   saveDatabase();
 }
 
+/**
+ * Closes the database connection
+ */
 export function closeDatabase(): void {
   if (db) {
     db.close();
