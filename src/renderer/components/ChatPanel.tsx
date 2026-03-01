@@ -37,10 +37,6 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
 
   return (
     <div className="flex-1 flex flex-col">
-      <div className="p-4 border-b border-zinc-800">
-        <span className="text-sm text-zinc-400">{t('chat.title')}</span>
-      </div>
-
       <div className="flex-1 p-4 overflow-auto">
         {messages.length === 0 ? (
           <p className="text-zinc-600 text-sm">

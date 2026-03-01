@@ -22,10 +22,6 @@ export default function EditorPanel({ code, onChange, onSubmit, submitting }: Ed
 
   return (
     <div className="flex-1 flex flex-col">
-      <div className="p-4 border-b border-zinc-800">
-        <span className="text-sm text-zinc-400">{t('editor.title')}</span>
-      </div>
-
       <div className="flex-1">
         <Editor
           height="100%"
