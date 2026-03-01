@@ -27,6 +27,17 @@ interface ProblemResult {
 }
 
 const TOTAL_PROBLEMS = 5;
+const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor\):\([^)]+\)\]\]/g;
+
+/**
+ * Strips guide-anchor markers from code
+ *
+ * @param code - Source code with potential guide-anchors
+ * @returns Clean code without guide-anchors
+ */
+const stripGuideAnchors = (code: string): string => {
+  return code.replace(GUIDE_ANCHOR_REGEX, '');
+};
 
 /**
  * Level test component for evaluating user's C programming skills
@@ -195,12 +206,12 @@ export default function LevelTest() {
       } else if (attachments?.editable) {
         userAnswer = code;
         if (currentProblem.testCases && currentProblem.testCases.length > 0) {
-          const result: TestResult = await window.electronAPI.dockerTest(code, currentProblem.testCases);
+          const result: TestResult = await window.electronAPI.dockerTest(stripGuideAnchors(code), currentProblem.testCases);
           correct = result.allPassed;
         }
       } else if (currentProblem.type === 'predict-output') {
         userAnswer = predictAnswer;
-        const execResult = await window.electronAPI.dockerExecute(currentProblem.code || '', '');
+        const execResult = await window.electronAPI.dockerExecute(stripGuideAnchors(currentProblem.code || ''), '');
         correct = execResult.success && execResult.output.trim() === predictAnswer.trim();
       }
 

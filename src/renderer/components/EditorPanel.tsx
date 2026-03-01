@@ -52,6 +52,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
     while ((match = GUIDE_ANCHOR_REGEX.exec(text)) !== null) {
       const startPos = model.getPositionAt(match.index);
       const endPos = model.getPositionAt(match.index + match[0].length);
+      const labelText = match[1];
 
       decorations.push({
         range: {
@@ -61,7 +62,11 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
           endColumn: endPos.column,
         },
         options: {
-          inlineClassName: 'guide-anchor-decoration',
+          inlineClassName: 'guide-anchor-hidden',
+          before: {
+            content: labelText,
+            inlineClassName: 'guide-anchor-button',
+          },
           hoverMessage: { value: '클릭하여 코드를 입력하세요' },
         },
       });
@@ -82,6 +87,43 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
 
     editor.onDidChangeModelContent(() => {
       applyGuideAnchorDecorations();
+    });
+
+    editor.onMouseDown((e) => {
+      if (!e.target.position) return;
+
+      const model = editor.getModel();
+      if (!model) return;
+
+      const position = e.target.position;
+      const lineContent = model.getLineContent(position.lineNumber);
+
+      const match = GUIDE_ANCHOR_REGEX.exec(lineContent);
+      GUIDE_ANCHOR_REGEX.lastIndex = 0;
+
+      if (match) {
+        const startCol = match.index + 1;
+        const endCol = startCol + match[0].length;
+
+        if (position.column >= startCol && position.column <= endCol) {
+          model.pushEditOperations(
+            [],
+            [{
+              range: {
+                startLineNumber: position.lineNumber,
+                startColumn: startCol,
+                endLineNumber: position.lineNumber,
+                endColumn: endCol,
+              },
+              text: '',
+            }],
+            () => null
+          );
+
+          editor.setPosition({ lineNumber: position.lineNumber, column: startCol });
+          editor.focus();
+        }
+      }
     });
   }, [applyGuideAnchorDecorations]);
 
@@ -107,6 +149,13 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
   };
 
   /**
+   * Strips guide-anchor markers from code
+   */
+  const stripGuideAnchors = (sourceCode: string): string => {
+    return sourceCode.replace(GUIDE_ANCHOR_REGEX, '');
+  };
+
+  /**
    * Runs the code and displays output
    */
   const handleRun = async () => {
@@ -114,7 +163,8 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
     setOutput('');
 
     try {
-      const result = await window.electronAPI.dockerExecute(code, '');
+      const cleanCode = stripGuideAnchors(code);
+      const result = await window.electronAPI.dockerExecute(cleanCode, '');
       if (result.success) {
         setOutput(result.output || t('editor.noOutput'));
       } else {

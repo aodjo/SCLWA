@@ -38,7 +38,17 @@ ${recentHistory || '아직 풀이 기록이 없습니다.'}
 - 모든 코드는 컴파일 가능한 완전한 C 프로그램이어야 함
 - 반드시 #include <stdio.h> 등 필요한 헤더 포함
 - 반드시 int main() 함수 포함
-- 빈칸은 [[(guide-anchor):(클릭하여 코드를 완성하세요)]] 형식으로 표시
+- 빈칸 표시: 정확히 [[(guide-anchor):(클릭하여 코드를 완성하세요)]] 형식 사용
+
+예시:
+\`\`\`c
+#include <stdio.h>
+int main() {
+    int sum = [[(guide-anchor):(클릭하여 코드를 완성하세요)]];
+    printf("%d", sum);
+    return 0;
+}
+\`\`\`
 
 ## 문제 타입별 필수 설정
 - fill-blank: 코드 빈칸 채우기
