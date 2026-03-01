@@ -4,6 +4,8 @@ import Editor from '@monaco-editor/react';
 interface EditorPanelProps {
   code: string;
   onChange: (code: string) => void;
+  onSubmit?: () => void;
+  submitting?: boolean;
 }
 
 /**
@@ -11,9 +13,11 @@ interface EditorPanelProps {
  *
  * @param code - Current code content
  * @param onChange - Callback when code changes
+ * @param onSubmit - Callback when submitting code
+ * @param submitting - Whether submission is in progress
  * @returns Editor panel component
  */
-export default function EditorPanel({ code, onChange }: EditorPanelProps) {
+export default function EditorPanel({ code, onChange, onSubmit, submitting }: EditorPanelProps) {
   const { t } = useTranslation();
 
   return (
@@ -43,8 +47,12 @@ export default function EditorPanel({ code, onChange }: EditorPanelProps) {
       </div>
 
       <div className="p-4 border-t border-zinc-800">
-        <button className="w-full bg-zinc-50 text-zinc-950 rounded-md py-2 text-sm font-medium hover:bg-zinc-200 transition-colors cursor-pointer">
-          {t('editor.submit')}
+        <button
+          onClick={onSubmit}
+          disabled={submitting}
+          className="w-full bg-zinc-50 text-zinc-950 rounded-md py-2 text-sm font-medium hover:bg-zinc-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {submitting ? t('editor.submitting') : t('editor.submit')}
         </button>
       </div>
     </div>
