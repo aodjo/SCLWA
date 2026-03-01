@@ -5,10 +5,14 @@ import ProblemPanel from './ProblemPanel';
 import EditorPanel from './EditorPanel';
 import ChatPanel from './ChatPanel';
 import ResultPanel from './ResultPanel';
+import {
+  gradeMultipleChoice,
+  gradePredictOutput,
+  gradeWithTestCases,
+} from '../utils/graders';
 import type {
   Problem as BaseProblem,
   ProblemType,
-  TestResult,
   StudentProgress,
   ProblemRecord,
   ChatMessage,
@@ -27,17 +31,6 @@ interface ProblemResult {
 }
 
 const TOTAL_PROBLEMS = 5;
-const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor\):\([^)]+\)\]\]/g;
-
-/**
- * Strips guide-anchor markers from code
- *
- * @param code - Source code with potential guide-anchors
- * @returns Clean code without guide-anchors
- */
-const stripGuideAnchors = (code: string): string => {
-  return code.replace(GUIDE_ANCHOR_REGEX, '');
-};
 
 /**
  * Level test component for evaluating user's C programming skills
@@ -199,25 +192,38 @@ export default function LevelTest() {
     setError(null);
 
     try {
-      let correct = false;
-      let userAnswer = '';
+      const { attachments, type } = currentProblem;
 
-      const { attachments } = currentProblem;
+      console.log('[LevelTest] Grading problem:', {
+        type,
+        hasChoices: !!(attachments?.choices?.length),
+        isEditable: attachments?.editable,
+        hasTestCases: !!(currentProblem.testCases?.length),
+      });
 
-      if (attachments?.choices && attachments.choices.length > 0) {
-        userAnswer = String(selectedChoice);
-        correct = selectedChoice === currentProblem.answer;
-      } else if (attachments?.editable) {
-        userAnswer = code;
-        if (currentProblem.testCases && currentProblem.testCases.length > 0) {
-          const result: TestResult = await window.electronAPI.dockerTest(stripGuideAnchors(code), currentProblem.testCases);
-          correct = result.allPassed;
-        }
-      } else if (currentProblem.type === 'predict-output') {
-        userAnswer = predictAnswer;
-        const execResult = await window.electronAPI.dockerExecute(stripGuideAnchors(currentProblem.code || ''), '');
-        correct = execResult.success && execResult.output.trim() === predictAnswer.trim();
+      let gradeResult;
+
+      // Grade based on problem type
+      switch (type) {
+        case 'multiple-choice':
+          gradeResult = gradeMultipleChoice(selectedChoice, currentProblem.answer as number);
+          break;
+
+        case 'predict-output':
+          gradeResult = await gradePredictOutput(currentProblem.code || '', predictAnswer);
+          break;
+
+        case 'fill-blank':
+        case 'find-bug':
+          gradeResult = await gradeWithTestCases(code, currentProblem.testCases || []);
+          break;
+
+        default:
+          console.log('[LevelTest] Unknown problem type:', type);
+          gradeResult = { correct: false, userAnswer: '' };
       }
+
+      const { correct, userAnswer } = gradeResult;
 
       const problemResult: ProblemResult = {
         problem: currentProblem,
