@@ -302,7 +302,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
             </div>
 
             <div className="flex-1 p-4 overflow-y-auto overflow-x-hidden bg-zinc-800">
-              <pre className="text-sm font-mono whitespace-pre-wrap break-all">
+              <pre className="text-sm whitespace-pre-wrap break-all" style={{ fontFamily: 'Pretendard' }}>
                 {outputLines.length > 0 ? (
                   outputLines.map((line, i) => (
                     <span key={i} className={line.type === 'system' ? 'text-sky-600' : 'text-zinc-300'}>
