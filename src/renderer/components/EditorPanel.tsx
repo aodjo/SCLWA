@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Editor from '@monaco-editor/react';
 
@@ -19,9 +20,66 @@ interface EditorPanelProps {
  */
 export default function EditorPanel({ code, onChange, onSubmit, submitting }: EditorPanelProps) {
   const { t } = useTranslation();
+  const [output, setOutput] = useState<string>('');
+  const [running, setRunning] = useState(false);
+
+  /**
+   * Resets the code editor to empty state
+   */
+  const handleReset = () => {
+    onChange('');
+    setOutput('');
+  };
+
+  /**
+   * Runs the code and displays output
+   */
+  const handleRun = async () => {
+    setRunning(true);
+    setOutput('');
+
+    try {
+      const result = await window.electronAPI.dockerExecute(code, '');
+      if (result.success) {
+        setOutput(result.output || t('editor.noOutput'));
+      } else {
+        setOutput(result.error || t('editor.error'));
+      }
+    } catch (err) {
+      setOutput(t('editor.error'));
+    } finally {
+      setRunning(false);
+    }
+  };
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col bg-zinc-900">
+      <div className="flex items-center justify-between px-2 py-1 border-b border-zinc-700 bg-zinc-800">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-zinc-300 px-2 py-1 border-r border-zinc-700">C</span>
+          <select className="bg-zinc-700 text-zinc-300 text-sm px-2 py-1 rounded border-none outline-none cursor-pointer">
+            <option>C17</option>
+            <option>C11</option>
+            <option>C99</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleReset}
+            className="px-3 py-1 text-sm bg-zinc-700 text-zinc-300 rounded hover:bg-zinc-600 transition-colors cursor-pointer"
+          >
+            {t('editor.reset')}
+          </button>
+          <button
+            onClick={handleRun}
+            disabled={running}
+            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {running ? t('editor.running') : t('editor.run')}
+          </button>
+        </div>
+      </div>
+
       <div className="flex-1">
         <Editor
           height="100%"
@@ -42,14 +100,29 @@ export default function EditorPanel({ code, onChange, onSubmit, submitting }: Ed
         />
       </div>
 
-      <div className="p-4 border-t border-zinc-800">
-        <button
-          onClick={onSubmit}
-          disabled={submitting}
-          className="w-full bg-zinc-50 text-zinc-950 rounded-md py-2 text-sm font-medium hover:bg-zinc-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {submitting ? t('editor.submitting') : t('editor.submit')}
-        </button>
+      <div className="border-t border-zinc-700">
+        <div className="flex items-center border-b border-zinc-700">
+          <div className="px-4 py-2 border-r border-zinc-700 bg-zinc-800">
+            <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
+          </div>
+          <div className="flex-1 h-0.5 bg-amber-500" />
+        </div>
+
+        <div className="h-32 p-4 overflow-auto bg-zinc-950">
+          <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap">
+            {output || <span className="text-zinc-600">{t('editor.outputPlaceholder')}</span>}
+          </pre>
+        </div>
+
+        <div className="p-2 border-t border-zinc-700 flex justify-end">
+          <button
+            onClick={onSubmit}
+            disabled={submitting}
+            className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {submitting ? t('editor.submitting') : t('editor.submit')}
+          </button>
+        </div>
       </div>
     </div>
   );

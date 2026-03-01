@@ -26,6 +26,13 @@ export default {
     placeholder: '// 코드를 작성해주세요',
     submit: '제출',
     submitting: '제출 중...',
+    reset: '초기화',
+    run: '실행',
+    running: '실행 중...',
+    output: '실행 결과',
+    outputPlaceholder: '코드를 실행하면 결과가 여기에 표시돼요',
+    noOutput: '(출력 없음)',
+    error: '오류가 발생했어요',
   },
   problem: {
     title: '문제',
@@ -33,6 +40,7 @@ export default {
     progress: '문제 {{current}} / {{total}}',
     submit: '제출',
     submitting: '채점 중...',
+    answerLabel: '실행 결과',
     predictLabel: '출력 결과를 입력해주세요',
     predictPlaceholder: '예상 출력값',
     types: {
