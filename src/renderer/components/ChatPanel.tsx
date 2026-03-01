@@ -47,8 +47,11 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
             {messages.map((msg, index) => (
               <div
                 key={index}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
               >
+                {msg.role === 'assistant' && (
+                  <span className="text-xs text-zinc-500 mb-1">{t('chat.aiName')}</span>
+                )}
                 <div
                   className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
                     msg.role === 'user'

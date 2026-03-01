@@ -18,8 +18,9 @@ export default {
   },
   chat: {
     title: 'AI 채팅',
+    aiName: '세미',
     placeholder: '메시지를 입력해주세요...',
-    emptyMessage: '질문이 있으면 물어봐요!',
+    emptyMessage: '세미에게 질문해보세요!',
   },
   editor: {
     title: '코드 에디터',
