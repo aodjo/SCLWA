@@ -33,6 +33,8 @@ export default {
     running: '실행 중...',
     stop: '중지',
     stopped: '실행이 중지되었어요',
+    processStarted: '프로세스가 시작되었습니다.',
+    processEnded: '프로세스가 종료되었습니다.',
     output: '실행 결과',
     outputPlaceholder: '코드를 실행하면 결과가 여기에 표시돼요',
     noOutput: '(출력 없음)',

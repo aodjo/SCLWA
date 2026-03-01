@@ -164,18 +164,17 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
    */
   const handleRun = async () => {
     setRunning(true);
-    setOutput('');
+    setOutput(`[SYSTEM]${t('editor.processStarted')}`);
 
     try {
       const cleanCode = stripGuideAnchors(code);
       const result = await window.electronAPI.dockerExecute(cleanCode, '');
-      if (result.success) {
-        setOutput(result.output || t('editor.noOutput'));
-      } else {
-        setOutput(result.error || t('editor.error'));
-      }
+      const content = result.success
+        ? (result.output || t('editor.noOutput'))
+        : (result.error || t('editor.error'));
+      setOutput(`[SYSTEM]${t('editor.processStarted')}\n${content}\n[SYSTEM]${t('editor.processEnded')}`);
     } catch (err) {
-      setOutput(t('editor.error'));
+      setOutput(`[SYSTEM]${t('editor.processStarted')}\n${t('editor.error')}\n[SYSTEM]${t('editor.processEnded')}`);
     } finally {
       setRunning(false);
     }
@@ -187,7 +186,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
   const handleStop = async () => {
     await window.electronAPI.dockerStop();
     setRunning(false);
-    setOutput(t('editor.stopped'));
+    setOutput(`[SYSTEM]${t('editor.stopped')}`);
   };
 
   return (
@@ -290,8 +289,17 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
             </div>
 
             <div className="flex-1 p-4 overflow-y-auto overflow-x-hidden bg-zinc-800">
-              <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap break-all">
-                {output || <span className="text-zinc-600">{t('editor.outputPlaceholder')}</span>}
+              <pre className="text-sm font-mono whitespace-pre-wrap break-all">
+                {output ? (
+                  output.split('\n').map((line, i) => (
+                    <span key={i} className={line.startsWith('[SYSTEM]') ? 'text-sky-600' : 'text-zinc-300'}>
+                      {line.startsWith('[SYSTEM]') ? line.slice(8) : line}
+                      {i < output.split('\n').length - 1 && '\n'}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-zinc-600">{t('editor.outputPlaceholder')}</span>
+                )}
               </pre>
             </div>
 
