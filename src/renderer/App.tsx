@@ -1,21 +1,39 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Settings from './components/Settings';
 import TitleBar from './components/TitleBar';
-
-const STORAGE_KEY = 'sclwa-settings';
-
-function hasValidSettings(): boolean {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return false;
-
-  const settings = JSON.parse(saved);
-  return settings.aiConfigs?.some(
-    (c: { enabled: boolean; apiKey: string }) => c.enabled && c.apiKey.trim()
-  );
-}
+import './types/electron.d.ts';
 
 function App() {
-  const [showSettings, setShowSettings] = useState(!hasValidSettings());
+  const [showSettings, setShowSettings] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    checkSettings();
+  }, []);
+
+  const checkSettings = async () => {
+    try {
+      const configs = await window.electronAPI?.getAIConfigs();
+      const hasValid = configs?.some((c) => c.enabled && c.apiKey?.trim());
+      setShowSettings(!hasValid);
+    } catch (error) {
+      console.error('Failed to check settings:', error);
+      setShowSettings(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <>
+        <TitleBar />
+        <div className="pt-8 min-h-[calc(100vh-2rem)] flex items-center justify-center">
+          <p className="text-zinc-500">Loading...</p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

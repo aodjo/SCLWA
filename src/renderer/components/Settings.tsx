@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsType, AI_PROVIDERS, AIConfig, AIProvider } from '../types/settings';
+import { AI_PROVIDERS, AIConfig, AIProvider } from '../types/settings';
 import { SiOpenai } from 'react-icons/si';
 import { RiGeminiFill, RiClaudeFill } from 'react-icons/ri';
 import { BiShow, BiHide } from 'react-icons/bi';
+import '../types/electron.d.ts';
 
 const AI_ICONS: Record<AIProvider, React.ReactNode> = {
   openai: <SiOpenai />,
@@ -10,56 +11,60 @@ const AI_ICONS: Record<AIProvider, React.ReactNode> = {
   claude: <RiClaudeFill />,
 };
 
-const STORAGE_KEY = 'sclwa-settings';
-
-function loadSettings(): SettingsType {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    return JSON.parse(saved);
-  }
-  return {
-    aiConfigs: AI_PROVIDERS.map((p) => ({
-      provider: p.id,
-      apiKey: '',
-      enabled: false,
-    })),
-  };
-}
-
-function saveSettings(settings: SettingsType) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-}
-
 interface SettingsProps {
   onComplete: () => void;
 }
 
 export default function Settings({ onComplete }: SettingsProps) {
-  const [settings, setSettings] = useState<SettingsType>(loadSettings);
+  const [configs, setConfigs] = useState<AIConfig[]>(
+    AI_PROVIDERS.map((p) => ({ provider: p.id, apiKey: '', enabled: false }))
+  );
   const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
+    loadConfigs();
+  }, []);
 
-  const toggleProvider = (providerId: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      aiConfigs: prev.aiConfigs.map((config) =>
-        config.provider === providerId
-          ? { ...config, enabled: !config.enabled }
-          : config
-      ),
-    }));
+  const loadConfigs = async () => {
+    try {
+      const savedConfigs = await window.electronAPI?.getAIConfigs();
+      if (savedConfigs && savedConfigs.length > 0) {
+        setConfigs((prev) =>
+          prev.map((config) => {
+            const saved = savedConfigs.find((s) => s.provider === config.provider);
+            return saved ? { ...config, ...saved } : config;
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Failed to load configs:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateApiKey = (providerId: string, apiKey: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      aiConfigs: prev.aiConfigs.map((config) =>
-        config.provider === providerId ? { ...config, apiKey } : config
-      ),
-    }));
+  const toggleProvider = async (providerId: string) => {
+    const config = configs.find((c) => c.provider === providerId);
+    if (!config) return;
+
+    const newEnabled = !config.enabled;
+    setConfigs((prev) =>
+      prev.map((c) => (c.provider === providerId ? { ...c, enabled: newEnabled } : c))
+    );
+
+    await window.electronAPI?.saveAIConfig(providerId, config.apiKey, newEnabled);
+  };
+
+  const updateApiKey = async (providerId: string, apiKey: string) => {
+    const config = configs.find((c) => c.provider === providerId);
+    if (!config) return;
+
+    setConfigs((prev) =>
+      prev.map((c) => (c.provider === providerId ? { ...c, apiKey } : c))
+    );
+
+    await window.electronAPI?.saveAIConfig(providerId, apiKey, config.enabled);
   };
 
   const toggleShowApiKey = (providerId: string) => {
@@ -67,10 +72,18 @@ export default function Settings({ onComplete }: SettingsProps) {
   };
 
   const getConfig = (providerId: string): AIConfig | undefined => {
-    return settings.aiConfigs.find((c) => c.provider === providerId);
+    return configs.find((c) => c.provider === providerId);
   };
 
-  const canProceed = settings.aiConfigs.some((c) => c.enabled && c.apiKey.trim());
+  const canProceed = configs.some((c) => c.enabled && c.apiKey.trim());
+
+  if (loading) {
+    return (
+      <div className="min-h-[calc(100vh-2rem)] flex items-center justify-center">
+        <p className="text-zinc-500">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-2rem)] flex items-center justify-center p-8">

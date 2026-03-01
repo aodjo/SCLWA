@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import path from 'path';
+import { initDatabase, getAIConfigs, saveAIConfig, closeDatabase } from './database';
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -38,7 +39,18 @@ ipcMain.on('window-close', () => {
   BrowserWindow.getFocusedWindow()?.close();
 });
 
-app.whenReady().then(() => {
+// AI Config IPC handlers
+ipcMain.handle('get-ai-configs', () => {
+  return getAIConfigs();
+});
+
+ipcMain.handle('save-ai-config', (_, provider: string, apiKey: string, enabled: boolean) => {
+  saveAIConfig(provider, apiKey, enabled);
+  return true;
+});
+
+app.whenReady().then(async () => {
+  await initDatabase();
   Menu.setApplicationMenu(null);
   createWindow();
 
@@ -53,4 +65,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('quit', () => {
+  closeDatabase();
 });

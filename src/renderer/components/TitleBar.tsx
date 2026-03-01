@@ -1,14 +1,5 @@
 import { VscChromeMinimize, VscChromeMaximize, VscChromeClose } from 'react-icons/vsc';
-
-declare global {
-  interface Window {
-    electronAPI: {
-      minimize: () => void;
-      maximize: () => void;
-      close: () => void;
-    };
-  }
-}
+import '../types/electron.d.ts';
 
 export default function TitleBar() {
   return (
@@ -20,19 +11,19 @@ export default function TitleBar() {
       <div className="flex h-full">
         <button
           onClick={() => window.electronAPI?.minimize()}
-          className="h-full px-4 hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-zinc-50"
+          className="h-full px-4 hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-zinc-50 cursor-pointer"
         >
           <VscChromeMinimize />
         </button>
         <button
           onClick={() => window.electronAPI?.maximize()}
-          className="h-full px-4 hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-zinc-50"
+          className="h-full px-4 hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-zinc-50 cursor-pointer"
         >
           <VscChromeMaximize />
         </button>
         <button
           onClick={() => window.electronAPI?.close()}
-          className="h-full px-4 hover:bg-red-600 transition-colors flex items-center justify-center text-zinc-400 hover:text-zinc-50"
+          className="h-full px-4 hover:bg-red-600 transition-colors flex items-center justify-center text-zinc-400 hover:text-zinc-50 cursor-pointer"
         >
           <VscChromeClose />
         </button>
