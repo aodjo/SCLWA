@@ -62,7 +62,7 @@ export default function LevelTest() {
 
   const showEditor = !!currentProblem?.code;
   const isEditable = currentProblem?.attachments?.editable === true;
-  const isRunnable = currentProblem?.attachments?.runnable === true;
+  const isRunnable = currentProblem?.attachments?.runnable !== false;
   const currentIndex = progress?.history.length ?? 0;
   const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
 
