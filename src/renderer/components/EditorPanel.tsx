@@ -209,11 +209,15 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, onNext, 
 
   /**
    * Handles terminal input and sends to docker stdin
+   *
+   * @param data - Input data from terminal (Enter sends \r)
    */
   const handleTerminalInput = useCallback((data: string) => {
-    console.log('[Terminal] Input:', data, 'Running:', running);
+    console.log('[Terminal] Input:', JSON.stringify(data), 'Running:', running);
     if (running) {
-      window.electronAPI.dockerStdin(data);
+      // Convert \r to \n for proper line ending (scanf expects \n)
+      const converted = data.replace(/\r/g, '\n');
+      window.electronAPI.dockerStdin(converted);
     }
   }, [running]);
 

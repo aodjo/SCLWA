@@ -108,6 +108,7 @@ fi
         stdin: true,
         stdout: true,
         stderr: true,
+        hijack: true,
       });
 
       this.interactiveStream = stream;
