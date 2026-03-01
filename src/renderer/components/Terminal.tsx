@@ -25,6 +25,11 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(({ onData }, ref) => 
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const onDataRef = useRef(onData);
+
+  useEffect(() => {
+    onDataRef.current = onData;
+  }, [onData]);
 
   useImperativeHandle(ref, () => ({
     write: (data: string) => terminalRef.current?.write(data),
@@ -59,9 +64,9 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(({ onData }, ref) => 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    if (onData) {
-      terminal.onData(onData);
-    }
+    terminal.onData((data) => {
+      onDataRef.current?.(data);
+    });
 
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
@@ -72,7 +77,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(({ onData }, ref) => 
       resizeObserver.disconnect();
       terminal.dispose();
     };
-  }, [onData]);
+  }, []);
 
   return <div ref={containerRef} className="h-full w-full" />;
 });
