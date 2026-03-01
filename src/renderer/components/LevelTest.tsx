@@ -3,17 +3,13 @@ import { useTranslation } from 'react-i18next';
 import ProblemPanel from './ProblemPanel';
 import EditorPanel from './EditorPanel';
 import ChatPanel from './ChatPanel';
+import { Problem as BaseProblem, ProblemType } from '../types/electron.d.ts';
 
-export type ProblemType = 'fill-blank' | 'predict-output' | 'find-bug' | 'multiple-choice';
-
-export interface Problem {
+export interface Problem extends BaseProblem {
   id: number;
-  type: ProblemType;
-  question: string;
-  code?: string;
-  choices?: string[];
-  answer?: string;
 }
+
+export type { ProblemType };
 
 /** Problem types that require code editor */
 const CODE_PROBLEM_TYPES: ProblemType[] = ['fill-blank', 'find-bug'];

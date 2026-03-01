@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import path from 'path';
 import { initDatabase, getAIConfigs, saveAIConfig, closeDatabase } from './database';
+import { aiAdapter, ProblemType, Message, ProviderType } from './ai';
 
 /**
  * Creates the main application window with frameless style
@@ -72,6 +73,41 @@ ipcMain.handle('get-ai-configs', () => {
 ipcMain.handle('save-ai-config', (_, provider: string, apiKey: string, enabled: boolean) => {
   saveAIConfig(provider, apiKey, enabled);
   return true;
+});
+
+/**
+ * IPC handler to initialize AI provider
+ *
+ * @param _ - IPC event (unused)
+ * @param provider - Provider type
+ * @param apiKey - API key for the provider
+ */
+ipcMain.handle('ai-init', (_, provider: ProviderType, apiKey: string) => {
+  aiAdapter.setProvider(provider, apiKey);
+  return true;
+});
+
+/**
+ * IPC handler to generate a problem
+ *
+ * @param _ - IPC event (unused)
+ * @param type - Problem type
+ * @param difficulty - Difficulty level (1-5)
+ * @returns Generated problem
+ */
+ipcMain.handle('ai-generate-problem', async (_, type: ProblemType, difficulty: number) => {
+  return aiAdapter.generateProblem(type, difficulty);
+});
+
+/**
+ * IPC handler for AI chat
+ *
+ * @param _ - IPC event (unused)
+ * @param messages - Chat messages
+ * @returns AI response
+ */
+ipcMain.handle('ai-chat', async (_, messages: Message[]) => {
+  return aiAdapter.chat(messages);
 });
 
 app.whenReady().then(async () => {

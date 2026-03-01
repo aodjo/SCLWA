@@ -2,12 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 /**
  * Electron API exposed to renderer process via context bridge
- *
- * @property minimize - Minimizes the window
- * @property maximize - Toggles maximize/unmaximize
- * @property close - Closes the window
- * @property getAIConfigs - Retrieves all AI configurations
- * @property saveAIConfig - Saves an AI provider configuration
  */
 contextBridge.exposeInMainWorld('electronAPI', {
   /**
@@ -42,4 +36,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   saveAIConfig: (provider: string, apiKey: string, enabled: boolean) =>
     ipcRenderer.invoke('save-ai-config', provider, apiKey, enabled),
+
+  /**
+   * Initializes AI provider
+   *
+   * @param provider - Provider type (openai, gemini, claude)
+   * @param apiKey - API key for the provider
+   */
+  aiInit: (provider: string, apiKey: string) =>
+    ipcRenderer.invoke('ai-init', provider, apiKey),
+
+  /**
+   * Generates a problem using AI
+   *
+   * @param type - Problem type
+   * @param difficulty - Difficulty level (1-5)
+   * @returns Promise resolving to generated problem
+   */
+  aiGenerateProblem: (type: string, difficulty: number) =>
+    ipcRenderer.invoke('ai-generate-problem', type, difficulty),
+
+  /**
+   * Sends chat messages to AI
+   *
+   * @param messages - Array of chat messages
+   * @returns Promise resolving to AI response
+   */
+  aiChat: (messages: { role: string; content: string }[]) =>
+    ipcRenderer.invoke('ai-chat', messages),
 });
