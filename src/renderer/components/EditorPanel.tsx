@@ -8,6 +8,11 @@ import tomorrowNight from '../themes/tomorrow-night.json';
 const C_STANDARDS = ['C17', 'C11', 'C99'] as const;
 const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor\):\(([^)]+)\)\]\]/g;
 
+interface OutputLine {
+  type: 'system' | 'content';
+  text: string;
+}
+
 interface EditorPanelProps {
   code: string;
   onChange: (code: string) => void;
@@ -29,7 +34,7 @@ interface EditorPanelProps {
  */
 export default function EditorPanel({ code, onChange, onSubmit, onPass, submitting, readonly, runnable = true }: EditorPanelProps) {
   const { t } = useTranslation();
-  const [output, setOutput] = useState<string>('');
+  const [outputLines, setOutputLines] = useState<OutputLine[]>([]);
   const [running, setRunning] = useState(false);
   const [standard, setStandard] = useState<typeof C_STANDARDS[number]>('C17');
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -149,7 +154,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
    */
   const handleReset = () => {
     onChange('');
-    setOutput('');
+    setOutputLines([]);
   };
 
   /**
@@ -164,7 +169,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
    */
   const handleRun = async () => {
     setRunning(true);
-    setOutput(`[SYSTEM]${t('editor.processStarted')}`);
+    setOutputLines([{ type: 'system', text: t('editor.processStarted') }]);
 
     try {
       const cleanCode = stripGuideAnchors(code);
@@ -172,9 +177,17 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
       const content = result.success
         ? (result.output || t('editor.noOutput'))
         : (result.error || t('editor.error'));
-      setOutput(`[SYSTEM]${t('editor.processStarted')}\n${content}\n[SYSTEM]${t('editor.processEnded')}`);
+      setOutputLines([
+        { type: 'system', text: t('editor.processStarted') },
+        { type: 'content', text: content },
+        { type: 'system', text: t('editor.processEnded') },
+      ]);
     } catch (err) {
-      setOutput(`[SYSTEM]${t('editor.processStarted')}\n${t('editor.error')}\n[SYSTEM]${t('editor.processEnded')}`);
+      setOutputLines([
+        { type: 'system', text: t('editor.processStarted') },
+        { type: 'content', text: t('editor.error') },
+        { type: 'system', text: t('editor.processEnded') },
+      ]);
     } finally {
       setRunning(false);
     }
@@ -186,7 +199,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
   const handleStop = async () => {
     await window.electronAPI.dockerStop();
     setRunning(false);
-    setOutput(`[SYSTEM]${t('editor.stopped')}`);
+    setOutputLines([{ type: 'system', text: t('editor.stopped') }]);
   };
 
   return (
@@ -290,11 +303,11 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
 
             <div className="flex-1 p-4 overflow-y-auto overflow-x-hidden bg-zinc-800">
               <pre className="text-sm font-mono whitespace-pre-wrap break-all">
-                {output ? (
-                  output.split('\n').map((line, i) => (
-                    <span key={i} className={line.startsWith('[SYSTEM]') ? 'text-sky-600' : 'text-zinc-300'}>
-                      {line.startsWith('[SYSTEM]') ? line.slice(8) : line}
-                      {i < output.split('\n').length - 1 && '\n'}
+                {outputLines.length > 0 ? (
+                  outputLines.map((line, i) => (
+                    <span key={i} className={line.type === 'system' ? 'text-sky-600' : 'text-zinc-300'}>
+                      {line.text}
+                      {i < outputLines.length - 1 && '\n'}
                     </span>
                   ))
                 ) : (
