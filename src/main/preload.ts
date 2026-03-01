@@ -64,4 +64,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   aiChat: (messages: { role: string; content: string }[]) =>
     ipcRenderer.invoke('ai-chat', messages),
+
+  /**
+   * Executes C code in Docker container
+   *
+   * @param code - C source code
+   * @param input - Standard input
+   * @returns Promise resolving to execution result
+   */
+  dockerExecute: (code: string, input: string) =>
+    ipcRenderer.invoke('docker-execute', code, input),
+
+  /**
+   * Runs code against test cases in Docker
+   *
+   * @param code - C source code
+   * @param testCases - Array of test cases
+   * @returns Promise resolving to test results
+   */
+  dockerTest: (code: string, testCases: { input: string; expected: string }[]) =>
+    ipcRenderer.invoke('docker-test', code, testCases),
 });

@@ -20,6 +20,26 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface ExecutionResult {
+  success: boolean;
+  output: string;
+  error?: string;
+  exitCode: number;
+}
+
+export interface TestCaseResult {
+  input: string;
+  expected: string;
+  actual: string;
+  passed: boolean;
+}
+
+export interface TestResult {
+  allPassed: boolean;
+  results: TestCaseResult[];
+  compilationError?: string;
+}
+
 export interface ElectronAPI {
   // Window controls
   minimize: () => void;
@@ -34,6 +54,10 @@ export interface ElectronAPI {
   aiInit: (provider: string, apiKey: string) => Promise<boolean>;
   aiGenerateProblem: (type: ProblemType, difficulty: number) => Promise<Problem>;
   aiChat: (messages: ChatMessage[]) => Promise<string>;
+
+  // Docker
+  dockerExecute: (code: string, input: string) => Promise<ExecutionResult>;
+  dockerTest: (code: string, testCases: TestCase[]) => Promise<TestResult>;
 }
 
 declare global {

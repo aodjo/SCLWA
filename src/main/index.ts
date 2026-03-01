@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import path from 'path';
 import { initDatabase, getAIConfigs, saveAIConfig, closeDatabase } from './database';
 import { aiAdapter, ProblemType, Message, ProviderType } from './ai';
+import { codeExecutor } from './docker';
 
 /**
  * Creates the main application window with frameless style
@@ -108,6 +109,30 @@ ipcMain.handle('ai-generate-problem', async (_, type: ProblemType, difficulty: n
  */
 ipcMain.handle('ai-chat', async (_, messages: Message[]) => {
   return aiAdapter.chat(messages);
+});
+
+/**
+ * IPC handler to execute C code
+ *
+ * @param _ - IPC event (unused)
+ * @param code - C source code
+ * @param input - Standard input
+ * @returns Execution result
+ */
+ipcMain.handle('docker-execute', async (_, code: string, input: string) => {
+  return codeExecutor.execute(code, input);
+});
+
+/**
+ * IPC handler to run test cases
+ *
+ * @param _ - IPC event (unused)
+ * @param code - C source code
+ * @param testCases - Array of test cases
+ * @returns Test results
+ */
+ipcMain.handle('docker-test', async (_, code: string, testCases: { input: string; expected: string }[]) => {
+  return codeExecutor.runTestCases(code, testCases);
 });
 
 app.whenReady().then(async () => {
