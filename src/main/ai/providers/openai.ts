@@ -8,21 +8,16 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
-      name: 'generate_problem',
-      description: 'C 프로그래밍 문제를 생성합니다. 학생 수준에 맞는 타입과 난이도를 선택하세요.',
+      name: 'generate_fill_blank_problem',
+      description: '빈칸 채우기 문제를 생성합니다. 코드에 빈칸이 있고 학생이 직접 코드를 작성합니다.',
       parameters: {
         type: 'object',
         properties: {
-          type: {
-            type: 'string',
-            enum: ['fill-blank', 'predict-output', 'find-bug', 'multiple-choice'],
-            description: '문제 유형 (학생 수준에 맞게 선택)',
-          },
           difficulty: {
             type: 'number',
             minimum: 1,
             maximum: 5,
-            description: '난이도 1-5 (학생 수준에 맞게 선택)',
+            description: '난이도 1-5',
           },
           question: {
             type: 'string',
@@ -30,30 +25,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           code: {
             type: 'string',
-            description: '문제에 포함될 코드',
-          },
-          attachments: {
-            type: 'object',
-            properties: {
-              editable: {
-                type: 'boolean',
-                description: '사용자가 코드를 수정할 수 있는지 (true일 경우 testCases 필수)',
-              },
-              runnable: {
-                type: 'boolean',
-                description: '사용자가 코드를 실행할 수 있는지',
-              },
-              choices: {
-                type: 'array',
-                items: { type: 'string' },
-                description: '선택지 (객관식인 경우)',
-              },
-            },
-            additionalProperties: false,
-          },
-          answer: {
-            type: 'number',
-            description: '정답 (choices 사용시 선택지 인덱스, 0부터 시작)',
+            description: '빈칸이 포함된 코드. 빈칸은 [[(guide-anchor):(클릭하여 코드를 완성하세요)]] 형식으로 표시',
           },
           testCases: {
             type: 'array',
@@ -65,14 +37,113 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
               },
               required: ['input', 'expected'],
             },
-            description: 'editable: true일 때 필수. 코드 채점용 테스트 케이스. attachments 안이 아닌 여기에 배치!',
+            description: '채점용 테스트 케이스 (필수)',
           },
           solutionCode: {
             type: 'string',
             description: '정답 코드',
           },
         },
-        required: ['type', 'difficulty', 'question'],
+        required: ['difficulty', 'question', 'code', 'testCases'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_predict_output_problem',
+      description: '출력 예측 문제를 생성합니다. 완성된 코드를 보여주고 학생이 출력값을 예측합니다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          difficulty: {
+            type: 'number',
+            minimum: 1,
+            maximum: 5,
+            description: '난이도 1-5',
+          },
+          question: {
+            type: 'string',
+            description: '문제 설명 (예: "이 코드의 출력값은?")',
+          },
+          code: {
+            type: 'string',
+            description: '완전한 실행 가능 코드 (빈칸 없음)',
+          },
+        },
+        required: ['difficulty', 'question', 'code'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_find_bug_problem',
+      description: '버그 찾기 문제를 생성합니다. 버그가 있는 코드에서 문제점을 찾습니다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          difficulty: {
+            type: 'number',
+            minimum: 1,
+            maximum: 5,
+            description: '난이도 1-5',
+          },
+          question: {
+            type: 'string',
+            description: '문제 설명',
+          },
+          code: {
+            type: 'string',
+            description: '버그가 포함된 코드',
+          },
+          choices: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '선택지 (4개 권장)',
+          },
+          answer: {
+            type: 'number',
+            description: '정답 인덱스 (0부터 시작)',
+          },
+        },
+        required: ['difficulty', 'question', 'code', 'choices', 'answer'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_multiple_choice_problem',
+      description: '객관식 문제를 생성합니다. C 프로그래밍 관련 개념이나 코드 이해도를 테스트합니다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          difficulty: {
+            type: 'number',
+            minimum: 1,
+            maximum: 5,
+            description: '난이도 1-5',
+          },
+          question: {
+            type: 'string',
+            description: '문제 설명',
+          },
+          code: {
+            type: 'string',
+            description: '문제에 포함될 코드 (선택사항)',
+          },
+          choices: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '선택지 (4개 권장)',
+          },
+          answer: {
+            type: 'number',
+            description: '정답 인덱스 (0부터 시작)',
+          },
+        },
+        required: ['difficulty', 'question', 'choices', 'answer'],
       },
     },
   },
@@ -162,13 +233,48 @@ export class OpenAIProvider implements AIProvider {
         if (toolCall.type !== 'function') continue;
 
         const args = JSON.parse(toolCall.function.arguments);
-        console.log('[AI] Function:', toolCall.function.name);
+        const funcName = toolCall.function.name;
+        console.log('[AI] Function:', funcName, args);
 
-        if (toolCall.function.name === 'generate_problem') {
-          result.problem = args as Problem;
-        } else if (toolCall.function.name === 'send_message') {
+        if (funcName === 'generate_fill_blank_problem') {
+          result.problem = {
+            type: 'fill-blank',
+            difficulty: args.difficulty,
+            question: args.question,
+            code: args.code,
+            testCases: args.testCases,
+            solutionCode: args.solutionCode,
+            attachments: { editable: true, runnable: true },
+          };
+        } else if (funcName === 'generate_predict_output_problem') {
+          result.problem = {
+            type: 'predict-output',
+            difficulty: args.difficulty,
+            question: args.question,
+            code: args.code,
+            attachments: { editable: false, runnable: true },
+          };
+        } else if (funcName === 'generate_find_bug_problem') {
+          result.problem = {
+            type: 'find-bug',
+            difficulty: args.difficulty,
+            question: args.question,
+            code: args.code,
+            answer: args.answer,
+            attachments: { choices: args.choices },
+          };
+        } else if (funcName === 'generate_multiple_choice_problem') {
+          result.problem = {
+            type: 'multiple-choice',
+            difficulty: args.difficulty,
+            question: args.question,
+            code: args.code,
+            answer: args.answer,
+            attachments: { choices: args.choices },
+          };
+        } else if (funcName === 'send_message') {
           result.message = args.message;
-        } else if (toolCall.function.name === 'update_student_summary') {
+        } else if (funcName === 'update_student_summary') {
           result.studentSummary = args.summary;
         }
       }
