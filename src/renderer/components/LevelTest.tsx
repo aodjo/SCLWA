@@ -58,6 +58,7 @@ export default function LevelTest() {
   const [results, setResults] = useState<ProblemResult[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [waitingForNext, setWaitingForNext] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const showEditor = !!currentProblem?.code;
@@ -118,10 +119,6 @@ export default function LevelTest() {
         await window.electronAPI.saveStudentProgress(updatedProgress);
       }
 
-      if (response.message) {
-        setMessages((prev) => [...prev, { role: 'assistant', content: response.message! }]);
-      }
-
       if (response.problem) {
         const problem = response.problem;
         setCurrentProblem({ ...problem, id: problemIndex });
@@ -129,7 +126,11 @@ export default function LevelTest() {
         setPredictAnswer('');
         setSelectedChoice(null);
         setHintsUsed(0);
-        setMessages([]);
+        setWaitingForNext(false);
+
+        if (response.message) {
+          setMessages((prev) => [...prev, { role: 'assistant', content: response.message! }]);
+        }
       } else {
         throw new Error('No problem generated');
       }
@@ -250,16 +251,29 @@ export default function LevelTest() {
       setProgress(updatedProgress);
       await window.electronAPI.saveStudentProgress(updatedProgress);
 
+      const feedbackMessage = correct
+        ? '🎉 정답이에요! 잘했어요.'
+        : `😢 아쉬워요. ${currentProblem.solutionCode ? '정답 코드를 확인해보세요.' : '다음에 다시 도전해봐요!'}`;
+      setMessages((prev) => [...prev, { role: 'assistant', content: feedbackMessage }]);
+
       if (updatedProgress.history.length >= TOTAL_PROBLEMS) {
         setFinished(true);
       } else {
-        await generateProblem(updatedProgress);
+        setWaitingForNext(true);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit answer');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /**
+   * Moves to the next problem
+   */
+  const goToNextProblem = async () => {
+    if (!progress) return;
+    await generateProblem(progress);
   };
 
   /**
@@ -372,7 +386,9 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
               onPredictAnswerChange={setPredictAnswer}
               onSubmit={submitAnswer}
               onPass={passCurrentProblem}
+              onNext={goToNextProblem}
               submitting={submitting}
+              waitingForNext={waitingForNext}
             />
           </div>
         </Panel>
@@ -383,7 +399,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
           <>
             <Panel defaultSize="33%" minSize="20%">
               <div className="h-full flex flex-col">
-                <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} onPass={passCurrentProblem} submitting={submitting} readonly={!isEditable} runnable={isRunnable} />
+                <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} onPass={passCurrentProblem} onNext={goToNextProblem} submitting={submitting} waitingForNext={waitingForNext} readonly={!isEditable} runnable={isRunnable} />
               </div>
             </Panel>
             <Separator className="resize-handle" />

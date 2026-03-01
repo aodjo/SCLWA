@@ -183,6 +183,7 @@ ipcMain.handle('docker-execute-interactive', async (event, code: string) => {
  * @param data - Data to write to stdin
  */
 ipcMain.on('docker-stdin', (_, data: string) => {
+  console.log('[Main] Received stdin:', JSON.stringify(data));
   codeExecutor.writeStdin(data);
 });
 

@@ -9,7 +9,9 @@ interface ProblemPanelProps {
   onPredictAnswerChange?: (value: string) => void;
   onSubmit?: () => void;
   onPass?: () => void;
+  onNext?: () => void;
   submitting?: boolean;
+  waitingForNext?: boolean;
 }
 
 /**
@@ -32,7 +34,9 @@ export default function ProblemPanel({
   onPredictAnswerChange,
   onSubmit,
   onPass,
+  onNext,
   submitting,
+  waitingForNext,
 }: ProblemPanelProps) {
   const { t } = useTranslation();
 
@@ -105,22 +109,33 @@ export default function ProblemPanel({
           )}
 
           <div className="p-4 pt-0 flex gap-2">
-            {onPass && (
+            {waitingForNext ? (
               <button
-                onClick={onPass}
-                disabled={submitting}
-                className="flex-1 bg-zinc-300 text-zinc-700 rounded-md py-2 text-sm font-medium hover:bg-zinc-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={onNext}
+                className="flex-1 bg-zinc-800 text-white rounded-md py-2 text-sm font-medium hover:bg-zinc-700 transition-colors cursor-pointer"
               >
-                {t('problem.pass')}
+                {t('problem.next')}
               </button>
+            ) : (
+              <>
+                {onPass && (
+                  <button
+                    onClick={onPass}
+                    disabled={submitting}
+                    className="flex-1 bg-zinc-300 text-zinc-700 rounded-md py-2 text-sm font-medium hover:bg-zinc-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {t('problem.pass')}
+                  </button>
+                )}
+                <button
+                  onClick={onSubmit}
+                  disabled={submitting || (choices && choices.length > 0 && selectedChoice === null)}
+                  className="flex-1 bg-zinc-800 text-white rounded-md py-2 text-sm font-medium hover:bg-zinc-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? t('problem.submitting') : t('problem.submit')}
+                </button>
+              </>
             )}
-            <button
-              onClick={onSubmit}
-              disabled={submitting || (choices && choices.length > 0 && selectedChoice === null)}
-              className="flex-1 bg-zinc-800 text-white rounded-md py-2 text-sm font-medium hover:bg-zinc-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? t('problem.submitting') : t('problem.submit')}
-            </button>
           </div>
         </div>
       )}

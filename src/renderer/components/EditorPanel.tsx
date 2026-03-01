@@ -14,7 +14,9 @@ interface EditorPanelProps {
   onChange: (code: string) => void;
   onSubmit?: () => void;
   onPass?: () => void;
+  onNext?: () => void;
   submitting?: boolean;
+  waitingForNext?: boolean;
   readonly?: boolean;
   runnable?: boolean;
 }
@@ -28,7 +30,7 @@ interface EditorPanelProps {
  * @param submitting - Whether submission is in progress
  * @returns Editor panel component
  */
-export default function EditorPanel({ code, onChange, onSubmit, onPass, submitting, readonly, runnable = true }: EditorPanelProps) {
+export default function EditorPanel({ code, onChange, onSubmit, onPass, onNext, submitting, waitingForNext, readonly, runnable = true }: EditorPanelProps) {
   const { t } = useTranslation();
   const [running, setRunning] = useState(false);
   const [standard, setStandard] = useState<typeof C_STANDARDS[number]>('C17');
@@ -209,6 +211,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
    * Handles terminal input and sends to docker stdin
    */
   const handleTerminalInput = useCallback((data: string) => {
+    console.log('[Terminal] Input:', data, 'Running:', running);
     if (running) {
       window.electronAPI.dockerStdin(data);
     }
@@ -319,22 +322,33 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
 
             {!readonly && (
               <div className="p-2 border-t border-zinc-700 flex justify-end gap-2">
-                {onPass && (
+                {waitingForNext ? (
                   <button
-                    onClick={onPass}
-                    disabled={submitting}
-                    className="px-4 py-1.5 text-sm bg-zinc-600 text-white rounded hover:bg-zinc-500 transition-colors cursor-pointer disabled:opacity-50"
+                    onClick={onNext}
+                    className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer"
                   >
-                    {t('editor.pass')}
+                    {t('editor.next')}
                   </button>
+                ) : (
+                  <>
+                    {onPass && (
+                      <button
+                        onClick={onPass}
+                        disabled={submitting}
+                        className="px-4 py-1.5 text-sm bg-zinc-600 text-white rounded hover:bg-zinc-500 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {t('editor.pass')}
+                      </button>
+                    )}
+                    <button
+                      onClick={onSubmit}
+                      disabled={submitting}
+                      className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {submitting ? t('editor.submitting') : t('editor.submit')}
+                    </button>
+                  </>
                 )}
-                <button
-                  onClick={onSubmit}
-                  disabled={submitting}
-                  className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {submitting ? t('editor.submitting') : t('editor.submit')}
-                </button>
               </div>
             )}
           </div>

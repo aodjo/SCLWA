@@ -50,6 +50,7 @@ export class CodeExecutor {
    * @param data - Data to write to stdin
    */
   writeStdin(data: string): void {
+    console.log('[Docker] writeStdin:', JSON.stringify(data), 'Stream exists:', !!this.interactiveStream);
     if (this.interactiveStream) {
       this.interactiveStream.write(data);
     }
@@ -88,7 +89,7 @@ fi
         AttachStdin: true,
         AttachStdout: true,
         AttachStderr: true,
-        Tty: false,
+        Tty: true,
         OpenStdin: true,
         StdinOnce: false,
         NetworkDisabled: true,
@@ -113,37 +114,22 @@ fi
 
       let compilePhase = true;
       let compileOutput = '';
-      let buffer = Buffer.alloc(0);
 
       stream.on('data', (chunk: Buffer) => {
-        buffer = Buffer.concat([buffer, chunk]);
+        const text = chunk.toString('utf8');
 
-        while (buffer.length >= 8) {
-          const type = buffer[0];
-          const size = buffer.readUInt32BE(4);
-
-          if (buffer.length < 8 + size) break;
-
-          const payload = buffer.subarray(8, 8 + size).toString('utf8');
-          buffer = buffer.subarray(8 + size);
-
-          if (compilePhase) {
-            if (payload.includes('---COMPILE_SUCCESS---')) {
-              compilePhase = false;
-              const parts = payload.split('---COMPILE_SUCCESS---');
-              if (parts[0]) compileOutput += parts[0];
-              const afterCompile = parts[1]?.replace(/^\r?\n/, '');
-              if (afterCompile) callbacks.onStdout(afterCompile);
-            } else {
-              compileOutput += payload;
-            }
+        if (compilePhase) {
+          if (text.includes('---COMPILE_SUCCESS---')) {
+            compilePhase = false;
+            const parts = text.split('---COMPILE_SUCCESS---');
+            if (parts[0]) compileOutput += parts[0];
+            const afterCompile = parts[1]?.replace(/^\r?\n/, '');
+            if (afterCompile) callbacks.onStdout(afterCompile);
           } else {
-            if (type === 1) {
-              callbacks.onStdout(payload);
-            } else if (type === 2) {
-              callbacks.onStderr(payload);
-            }
+            compileOutput += text;
           }
+        } else {
+          callbacks.onStdout(text);
         }
       });
 
