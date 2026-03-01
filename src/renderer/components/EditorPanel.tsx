@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { editor } from 'monaco-editor';
+import tomorrowNight from '../themes/tomorrow-night.json';
 
 const C_STANDARDS = ['C17', 'C11', 'C99'] as const;
 const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor\):\(([^)]+)\)\]\]/g;
@@ -81,8 +82,11 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
   /**
    * Handles Monaco editor mount event
    */
-  const handleEditorMount: OnMount = useCallback((editor) => {
+  const handleEditorMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
+
+    monaco.editor.defineTheme('tomorrow-night', tomorrowNight as editor.IStandaloneThemeData);
+    monaco.editor.setTheme('tomorrow-night');
     applyGuideAnchorDecorations();
 
     editor.onDidChangeModelContent(() => {
@@ -239,7 +243,7 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, submitti
             <Editor
               height="100%"
               defaultLanguage="c"
-              theme="vs-dark"
+              theme="tomorrow-night"
               value={code}
               onChange={(value) => onChange(value ?? '')}
               onMount={handleEditorMount}
