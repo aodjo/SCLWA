@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Settings as SettingsType, AI_PROVIDERS, AIConfig, AIProvider } from '../types/settings';
 import { SiOpenai } from 'react-icons/si';
 import { RiGeminiFill, RiClaudeFill } from 'react-icons/ri';
-import './Settings.css';
+import { BiShow, BiHide } from 'react-icons/bi';
 
 const AI_ICONS: Record<AIProvider, React.ReactNode> = {
   openai: <SiOpenai />,
@@ -73,12 +73,12 @@ export default function Settings({ onComplete }: SettingsProps) {
   const canProceed = settings.aiConfigs.some((c) => c.enabled && c.apiKey.trim());
 
   return (
-    <div className="settings">
-      <div className="settings-container">
-        <h1>SCLWA</h1>
-        <p className="settings-subtitle">AI를 선택하고 API 키를 입력하세요</p>
+    <div className="min-h-screen flex items-center justify-center p-8">
+      <div className="w-full max-w-md">
+        <h1 className="text-3xl font-bold text-center mb-2">SCLWA</h1>
+        <p className="text-zinc-500 text-center mb-8">AI를 선택하고 API 키를 입력하세요</p>
 
-        <div className="ai-list">
+        <div className="flex flex-col gap-3 mb-6">
           {AI_PROVIDERS.map((provider) => {
             const config = getConfig(provider.id);
             const isEnabled = config?.enabled ?? false;
@@ -87,40 +87,59 @@ export default function Settings({ onComplete }: SettingsProps) {
             return (
               <div
                 key={provider.id}
-                className={`ai-card ${!provider.available ? 'disabled' : ''} ${isEnabled ? 'selected' : ''}`}
+                className={`
+                  bg-zinc-900 border rounded-lg p-4 transition-all duration-150
+                  ${!provider.available ? 'opacity-50' : ''}
+                  ${isEnabled ? 'border-zinc-700 bg-zinc-900/80' : 'border-zinc-800'}
+                `}
               >
-                <div className="ai-card-header">
-                  <label className="checkbox-label">
+                <div className="flex items-center justify-between">
+                  <label className={`flex items-center gap-3 ${provider.available ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
                     <input
                       type="checkbox"
                       checked={isEnabled}
                       onChange={() => toggleProvider(provider.id)}
                       disabled={!provider.available}
+                      className="hidden"
                     />
-                    <span className="checkbox-custom"></span>
-                    <span className="ai-icon">{AI_ICONS[provider.id]}</span>
-                    <span className="ai-name">{provider.name}</span>
+                    <span
+                      className={`
+                        w-[18px] h-[18px] border-2 rounded relative transition-all duration-150
+                        ${isEnabled ? 'bg-zinc-50 border-zinc-50' : 'border-zinc-700'}
+                      `}
+                    >
+                      {isEnabled && (
+                        <span className="absolute left-[5px] top-[2px] w-1 h-2 border-zinc-900 border-r-2 border-b-2 rotate-45" />
+                      )}
+                    </span>
+                    <span className={`text-lg ${isEnabled ? 'text-zinc-50' : 'text-zinc-500'}`}>
+                      {AI_ICONS[provider.id]}
+                    </span>
+                    <span className="font-medium">{provider.name}</span>
                   </label>
                   {!provider.available && (
-                    <span className="coming-soon">Coming Soon</span>
+                    <span className="text-xs text-zinc-600 bg-zinc-800 px-2 py-1 rounded">
+                      Coming Soon
+                    </span>
                   )}
                 </div>
 
                 {isEnabled && provider.available && (
-                  <div className="api-key-input">
-                    <div className="input-wrapper">
+                  <div className="mt-4">
+                    <div className="flex gap-2">
                       <input
                         type={showApiKey[provider.id] ? 'text' : 'password'}
                         placeholder="API Key"
                         value={apiKey}
                         onChange={(e) => updateApiKey(provider.id, e.target.value)}
+                        className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2.5 text-sm text-zinc-50 outline-none focus:border-zinc-700 transition-colors placeholder:text-zinc-600"
                       />
                       <button
-                        className="toggle-visibility"
                         onClick={() => toggleShowApiKey(provider.id)}
                         type="button"
+                        className="flex items-center justify-center bg-zinc-800 rounded-md px-3 text-zinc-500 text-lg hover:bg-zinc-700 hover:text-zinc-50 transition-all"
                       >
-                        {showApiKey[provider.id] ? 'Hide' : 'Show'}
+                        {showApiKey[provider.id] ? <BiHide /> : <BiShow />}
                       </button>
                     </div>
                   </div>
@@ -131,9 +150,9 @@ export default function Settings({ onComplete }: SettingsProps) {
         </div>
 
         <button
-          className="proceed-button"
           disabled={!canProceed}
           onClick={onComplete}
+          className="w-full bg-zinc-50 text-zinc-950 rounded-md py-3 text-sm font-medium hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           시작하기
         </button>

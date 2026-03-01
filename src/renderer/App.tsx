@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Settings from './components/Settings';
 
 const STORAGE_KEY = 'sclwa-settings';
@@ -21,20 +21,12 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <h1>SCLWA</h1>
-      <p>Study C Language with AI</p>
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+      <h1 className="text-5xl font-bold">SCLWA</h1>
+      <p className="text-zinc-500 text-xl">Study C Language with AI</p>
       <button
         onClick={() => setShowSettings(true)}
-        style={{
-          marginTop: '2rem',
-          background: '#27272a',
-          border: 'none',
-          borderRadius: '6px',
-          padding: '0.5rem 1rem',
-          color: '#a1a1aa',
-          cursor: 'pointer',
-        }}
+        className="mt-8 bg-zinc-800 rounded-md px-4 py-2 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-50 transition-colors"
       >
         설정
       </button>
