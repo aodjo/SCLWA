@@ -54,6 +54,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(({ onData }, ref) => 
       fontSize: 14,
       cursorBlink: true,
       convertEol: true,
+      allowProposedApi: true,
     });
 
     const fitAddon = new FitAddon();
