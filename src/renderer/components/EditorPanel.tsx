@@ -87,6 +87,7 @@ export default function EditorPanel({
     while ((match = regex.exec(text)) !== null) {
       const startPos = model.getPositionAt(match.index);
       const endPos = model.getPositionAt(match.index + match[0].length);
+      const hintText = match[1]; // Extract hint text between ___
 
       decorations.push({
         range: {
@@ -96,7 +97,11 @@ export default function EditorPanel({
           endColumn: endPos.column,
         },
         options: {
-          inlineClassName: 'blank-marker',
+          inlineClassName: 'blank-marker-hidden',
+          before: {
+            content: hintText,
+            inlineClassName: 'blank-marker-button',
+          },
           hoverMessage: { value: '클릭하여 코드를 입력하세요' },
         },
       });
@@ -154,6 +159,53 @@ export default function EditorPanel({
 
           editor.setPosition({ lineNumber: position.lineNumber, column: startCol });
           editor.focus();
+        }
+      }
+    });
+
+    // Handle Backspace/Delete to remove entire blank marker
+    editor.onKeyDown((e) => {
+      if (e.keyCode !== monaco.KeyCode.Backspace && e.keyCode !== monaco.KeyCode.Delete) return;
+
+      const model = editor.getModel();
+      if (!model) return;
+
+      const position = editor.getPosition();
+      if (!position) return;
+
+      const lineContent = model.getLineContent(position.lineNumber);
+      const regex = /___([^_]+)___/g;
+      let match;
+
+      while ((match = regex.exec(lineContent)) !== null) {
+        const startCol = match.index + 1;
+        const endCol = startCol + match[0].length;
+
+        // Check if cursor is inside or at the edge of the marker
+        const isBackspaceAtEnd = e.keyCode === monaco.KeyCode.Backspace && position.column === endCol;
+        const isDeleteAtStart = e.keyCode === monaco.KeyCode.Delete && position.column === startCol;
+        const isInsideMarker = position.column > startCol && position.column < endCol;
+
+        if (isBackspaceAtEnd || isDeleteAtStart || isInsideMarker) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          model.pushEditOperations(
+            [],
+            [{
+              range: {
+                startLineNumber: position.lineNumber,
+                startColumn: startCol,
+                endLineNumber: position.lineNumber,
+                endColumn: endCol,
+              },
+              text: '',
+            }],
+            () => null
+          );
+
+          editor.setPosition({ lineNumber: position.lineNumber, column: startCol });
+          break;
         }
       }
     });
