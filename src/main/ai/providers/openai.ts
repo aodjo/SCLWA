@@ -10,7 +10,7 @@ import {
   SubmissionReviewInput,
   SubmissionReviewResult,
 } from '../types';
-import { buildLevelTestPrompt, buildLearningPrompt } from '../prompts';
+import { buildLearningPrompt } from '../prompts';
 
 const MODEL = 'gpt-5-mini-2025-08-07';
 
@@ -437,105 +437,6 @@ export class OpenAIProvider implements AIProvider {
    */
   constructor(apiKey: string) {
     this.client = new OpenAI({ apiKey });
-  }
-
-  /**
-   * Generates a level test problem (5 problems to assess skill level)
-   *
-   * @param progress - Student's current progress
-   * @param problemIndex - Current problem number (1-5)
-   * @returns Promise resolving to Semi's response
-   */
-  async generateLevelTestProblem(progress: StudentProgress, problemIndex: number): Promise<SemiResponse> {
-    const systemPrompt = buildLevelTestPrompt();
-    const historyConversation = buildHistoryConversation(progress.history);
-
-    console.log('[AI] Generating level test problem for index:', problemIndex);
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      ...historyConversation,
-      {
-        role: 'user',
-        content: `다음 문제를 출제해주세요.
-현재 순번: ${problemIndex}/5
-목표: 이전 결과를 바탕으로 학생 실력 경계를 탐색하는 문제를 선택하세요.`,
-      },
-    ];
-
-    const response = await this.client.chat.completions.create({
-      model: MODEL,
-      messages,
-      tools: TOOLS,
-      tool_choice: 'required',
-    });
-
-    console.log('[AI] Response received');
-
-    const result: SemiResponse = {};
-    const choice = response.choices[0];
-
-    if (choice.message.tool_calls) {
-      for (const toolCall of choice.message.tool_calls) {
-        if (toolCall.type !== 'function') continue;
-
-        const args = JSON.parse(toolCall.function.arguments);
-        const funcName = toolCall.function.name;
-        console.log('[AI] Function:', funcName, args);
-
-        if (funcName === 'generate_fill_blank_problem') {
-          result.problem = {
-            type: 'fill-blank',
-            question: args.question,
-            code: normalizeEscapedCode(args.code),
-            testCases: args.testCases,
-            solutionCode: normalizeEscapedCode(args.solutionCode),
-            attachments: { editable: true, runnable: true },
-          };
-        } else if (funcName === 'generate_predict_output_problem') {
-          result.problem = {
-            type: 'predict-output',
-            question: args.question,
-            code: normalizeEscapedCode(args.code),
-            attachments: { editable: false, runnable: false },
-          };
-        } else if (funcName === 'generate_find_bug_problem') {
-          const cleanedChoices = sanitizeChoices(args.choices);
-          result.problem = {
-            type: 'find-bug',
-            question: args.question,
-            code: normalizeEscapedCode(args.code),
-            answer: args.answer,
-            attachments: { choices: cleanedChoices, editable: false, runnable: false },
-          };
-        } else if (funcName === 'generate_multiple_choice_problem') {
-          const cleanedChoices = sanitizeChoices(args.choices);
-          result.problem = {
-            type: 'multiple-choice',
-            question: args.question,
-            code: normalizeEscapedCode(args.code),
-            answer: args.answer,
-            attachments: { choices: cleanedChoices, editable: false, runnable: false },
-          };
-        }
-      }
-    }
-
-    if (choice.message.content && !result.message) {
-      result.message = choice.message.content;
-    }
-
-    if (!result.problem) {
-      throw new Error('No problem generated');
-    }
-
-    console.log('[AI] Result:');
-    console.dir({
-      hasProblem: !!result.problem,
-      problemType: result.problem?.type,
-      hasMessage: !!result.message,
-    }, { colors: true, depth: null });
-
-    return result;
   }
 
   /**

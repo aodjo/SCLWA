@@ -43,20 +43,6 @@ export class AIAdapter {
   }
 
   /**
-   * Generates a level test problem (5 problems to assess skill level)
-   *
-   * @param progress - Student's current progress
-   * @param problemIndex - Current problem number (1-5)
-   * @returns Promise resolving to Semi's response
-   */
-  async generateLevelTestProblem(progress: StudentProgress, problemIndex: number): Promise<SemiResponse> {
-    if (!this.provider) {
-      throw new Error('No AI provider set');
-    }
-    return this.provider.generateLevelTestProblem(progress, problemIndex);
-  }
-
-  /**
    * Generates a learning problem (concept-based progressive learning)
    *
    * @param progress - Student's current progress
