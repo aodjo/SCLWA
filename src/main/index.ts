@@ -155,6 +155,47 @@ ipcMain.handle('ai-review-submission', async (_, input: SubmissionReviewInput) =
 });
 
 /**
+ * IPC handler for learning mode chat with tool calling
+ *
+ * @param _ - IPC event (unused)
+ * @param messages - Chat messages
+ * @param editorCode - Current code in editor
+ * @returns Learning chat result with message and/or tool calls
+ */
+ipcMain.handle('ai-learning-chat', async (_, messages: Message[], editorCode: string) => {
+  return aiAdapter.learningChat(messages, editorCode);
+});
+
+/**
+ * IPC handler for streaming learning mode chat with tool calling
+ *
+ * @param event - IPC event with sender for chunk streaming
+ * @param requestId - Client request ID for matching events
+ * @param messages - Chat messages
+ * @param editorCode - Current code in editor
+ * @returns true when stream completes
+ */
+ipcMain.handle(
+  'ai-learning-chat-stream',
+  async (event, requestId: string, messages: Message[], editorCode: string) => {
+    const sender = event.sender;
+
+    try {
+      const result = await aiAdapter.learningChatStream(messages, editorCode, (delta) => {
+        sender.send('ai-learning-chat-stream-delta', { requestId, delta });
+      });
+
+      sender.send('ai-learning-chat-stream-done', { requestId, result });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI learning stream failed';
+      sender.send('ai-learning-chat-stream-error', { requestId, error: message });
+      return false;
+    }
+  },
+);
+
+/**
  * IPC handler for streaming AI chat response
  *
  * @param event - IPC event with sender for chunk streaming

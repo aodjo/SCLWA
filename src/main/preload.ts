@@ -89,6 +89,71 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('ai-review-submission', input),
 
   /**
+   * Learning mode chat with tool calling capabilities
+   *
+   * @param messages - Chat messages
+   * @param editorCode - Current code in editor
+   * @returns Promise resolving to chat result with optional tool calls
+   */
+  aiLearningChat: (messages: { role: string; content: string }[], editorCode: string) =>
+    ipcRenderer.invoke('ai-learning-chat', messages, editorCode),
+
+  /**
+   * Starts streaming learning mode chat with tool calling
+   *
+   * @param requestId - Unique request identifier
+   * @param messages - Chat messages
+   * @param editorCode - Current code in editor
+   * @returns Promise resolving to true on success
+   */
+  aiLearningChatStream: (
+    requestId: string,
+    messages: { role: string; content: string }[],
+    editorCode: string,
+  ) => ipcRenderer.invoke('ai-learning-chat-stream', requestId, messages, editorCode),
+
+  /**
+   * Registers callback for learning chat stream text chunks
+   *
+   * @param callback - Function called with stream delta payload
+   * @returns Cleanup function to remove listener
+   */
+  onAILearningChatStreamDelta: (callback: (payload: { requestId: string; delta: string }) => void) => {
+    const handler = (_: unknown, payload: { requestId: string; delta: string }) => callback(payload);
+    ipcRenderer.on('ai-learning-chat-stream-delta', handler);
+    return () => ipcRenderer.removeListener('ai-learning-chat-stream-delta', handler);
+  },
+
+  /**
+   * Registers callback when learning chat stream completes
+   *
+   * @param callback - Function called with completion payload including tool calls
+   * @returns Cleanup function to remove listener
+   */
+  onAILearningChatStreamDone: (
+    callback: (payload: { requestId: string; result: { message?: string; toolCalls?: { name: string; args: Record<string, unknown> }[] } }) => void,
+  ) => {
+    const handler = (
+      _: unknown,
+      payload: { requestId: string; result: { message?: string; toolCalls?: { name: string; args: Record<string, unknown> }[] } },
+    ) => callback(payload);
+    ipcRenderer.on('ai-learning-chat-stream-done', handler);
+    return () => ipcRenderer.removeListener('ai-learning-chat-stream-done', handler);
+  },
+
+  /**
+   * Registers callback when learning chat stream fails
+   *
+   * @param callback - Function called with error payload
+   * @returns Cleanup function to remove listener
+   */
+  onAILearningChatStreamError: (callback: (payload: { requestId: string; error: string }) => void) => {
+    const handler = (_: unknown, payload: { requestId: string; error: string }) => callback(payload);
+    ipcRenderer.on('ai-learning-chat-stream-error', handler);
+    return () => ipcRenderer.removeListener('ai-learning-chat-stream-error', handler);
+  },
+
+  /**
    * Starts streaming AI chat response
    *
    * @param requestId - Unique request identifier

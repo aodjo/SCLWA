@@ -1,4 +1,4 @@
-import { AIProvider, Message, StudentProgress, SemiResponse, SubmissionReviewInput, SubmissionReviewResult } from './types';
+import { AIProvider, Message, StudentProgress, SemiResponse, LearningChatResult, SubmissionReviewInput, SubmissionReviewResult } from './types';
 import { OpenAIProvider } from './providers/openai';
 
 export type ProviderType = 'openai' | 'gemini' | 'claude';
@@ -107,6 +107,39 @@ export class AIAdapter {
       throw new Error('No AI provider set');
     }
     return this.provider.reviewSubmission(input);
+  }
+
+  /**
+   * Learning mode chat with tool calling capabilities
+   *
+   * @param messages - Array of chat messages
+   * @param editorCode - Current code in editor (for read_editor tool)
+   * @returns Promise resolving to chat result with optional tool calls
+   */
+  async learningChat(messages: Message[], editorCode: string): Promise<LearningChatResult> {
+    if (!this.provider) {
+      throw new Error('No AI provider set');
+    }
+    return this.provider.learningChat(messages, editorCode);
+  }
+
+  /**
+   * Learning mode chat with streaming and tool calling
+   *
+   * @param messages - Array of chat messages
+   * @param editorCode - Current code in editor
+   * @param onDelta - Callback for text chunks
+   * @returns Promise resolving to chat result with optional tool calls
+   */
+  async learningChatStream(
+    messages: Message[],
+    editorCode: string,
+    onDelta: (delta: string) => void,
+  ): Promise<LearningChatResult> {
+    if (!this.provider) {
+      throw new Error('No AI provider set');
+    }
+    return this.provider.learningChatStream(messages, editorCode, onDelta);
   }
 }
 

@@ -18,6 +18,7 @@ import type {
   ChatMessage,
   ConversationMessageRecord,
   ToolCallRecord,
+  LearningToolCall,
 } from '../types/electron.d.ts';
 
 export interface Problem extends BaseProblem {
@@ -129,6 +130,12 @@ export default function LevelTest({
     typeof window.electronAPI.onAIChatStreamDelta === 'function' &&
     typeof window.electronAPI.onAIChatStreamDone === 'function' &&
     typeof window.electronAPI.onAIChatStreamError === 'function';
+  const canUseLearningChatStream =
+    typeof window.electronAPI.aiLearningChatStream === 'function' &&
+    typeof window.electronAPI.onAILearningChatStreamDelta === 'function' &&
+    typeof window.electronAPI.onAILearningChatStreamDone === 'function' &&
+    typeof window.electronAPI.onAILearningChatStreamError === 'function';
+  const activeLearningRequestIdRef = useRef<string | null>(null);
   const persistConversationMessage = useCallback(async (
     sender: ChatMessage['role'],
     content: string,
@@ -189,8 +196,20 @@ export default function LevelTest({
       return;
     }
 
-    if ((currentProgress.history?.length ?? 0) === 0) return;
     learningAnalysisOnceRef.current = true;
+
+    // No history - just greet and offer options
+    if ((currentProgress.history?.length ?? 0) === 0) {
+      const greetingMessage = '안녕! 나는 C 프로그래밍 튜터 세미야. 뭘 해볼까? 문제 풀어볼래, 코드 봐줄까, 아니면 개념 설명해줄까?';
+      setMessages((prev) => [...prev, { role: 'assistant', content: greetingMessage }]);
+      await persistConversationMessage(
+        'assistant',
+        greetingMessage,
+        undefined,
+        { kind: 'learning-initial-analysis' },
+      );
+      return;
+    }
 
     const analysisInput = {
       totalProblems: currentProgress.totalProblems,
@@ -216,7 +235,7 @@ export default function LevelTest({
 - 한국어로 작성
 - 4~6문장
 - 강점 1~2개, 보완점 1~2개
-- 마지막 문장은 "이제 같이 본격적으로 C 공부를 시작해봐요."로 끝낼 것
+- 마지막에 학생에게 선택지를 제시하세요: "뭘 해볼까? 문제 풀어볼래, 코드 봐줄까, 아니면 개념 설명해줄까?"
 - 정답이나 정답 코드를 직접 공개하지 말 것`,
       },
       {
@@ -295,6 +314,87 @@ export default function LevelTest({
     void persistConversationMessage('assistant', content);
   };
 
+  /**
+   * Processes tool calls from learning chat
+   *
+   * @param toolCalls - Array of tool calls from AI
+   */
+  const processLearningToolCalls = useCallback(async (toolCalls: LearningToolCall[]) => {
+    for (const toolCall of toolCalls) {
+      const { name, args } = toolCall;
+
+      // Handle modify_code - update the editor
+      if (name === 'modify_code' && args.code) {
+        setCode(args.code as string);
+        if (args.explanation) {
+          setMessages((prev) => [...prev, { role: 'assistant', content: args.explanation as string }]);
+          void persistConversationMessage('assistant', args.explanation as string);
+        }
+        continue;
+      }
+
+      // Handle read_editor - args.code already contains the editor code from server
+      if (name === 'read_editor') {
+        continue;
+      }
+
+      // Handle problem generation tools
+      if (name.startsWith('generate_')) {
+        let problem: BaseProblem | null = null;
+
+        if (name === 'generate_fill_blank_problem') {
+          problem = {
+            type: 'fill-blank',
+            question: args.question as string,
+            code: args.code as string,
+            testCases: args.testCases as { input: string; expected: string }[],
+            solutionCode: args.solutionCode as string,
+            attachments: { editable: true, runnable: true },
+          };
+        } else if (name === 'generate_predict_output_problem') {
+          problem = {
+            type: 'predict-output',
+            question: args.question as string,
+            code: args.code as string,
+            attachments: { editable: false, runnable: false },
+          };
+        } else if (name === 'generate_find_bug_problem') {
+          problem = {
+            type: 'find-bug',
+            question: args.question as string,
+            code: args.code as string,
+            answer: args.answer as number,
+            attachments: { choices: args.choices as string[], editable: false, runnable: false },
+          };
+        } else if (name === 'generate_multiple_choice_problem') {
+          problem = {
+            type: 'multiple-choice',
+            question: args.question as string,
+            code: args.code as string,
+            answer: args.answer as number,
+            attachments: { choices: args.choices as string[], editable: false, runnable: false },
+          };
+        }
+
+        if (problem) {
+          const sanitized = sanitizeProblemChoices(problem);
+          const problemIndex = (progressRef.current?.history.length ?? 0) + 1;
+          setCurrentProblem({ ...sanitized, id: problemIndex });
+          setCode(sanitized.code || '');
+          setPredictAnswer('');
+          setSelectedChoice(null);
+          setHintsUsed(0);
+          setWaitingForNext(false);
+
+          // Cache the generated problem
+          if (progressRef.current?.id) {
+            await window.electronAPI.saveGeneratedProblem(progressRef.current.id, problemIndex, sanitized);
+          }
+        }
+      }
+    }
+  }, [persistConversationMessage]);
+
   useEffect(() => {
     progressRef.current = progress;
   }, [progress]);
@@ -364,6 +464,84 @@ export default function LevelTest({
       cleanupError();
     };
   }, [canUseChatStream, persistConversationMessage]);
+
+  // Learning chat stream event listeners
+  useEffect(() => {
+    if (!canUseLearningChatStream) return;
+
+    const cleanupDelta = window.electronAPI.onAILearningChatStreamDelta(({ requestId, delta }) => {
+      if (activeLearningRequestIdRef.current !== requestId) return;
+
+      setMessages((prev) => {
+        const next = [...prev];
+        const assistantIndex = next.map((msg) => msg.role).lastIndexOf('assistant');
+
+        if (assistantIndex === -1) {
+          next.push({ role: 'assistant', content: delta });
+          return next;
+        }
+
+        next[assistantIndex] = {
+          ...next[assistantIndex],
+          content: `${next[assistantIndex].content}${delta}`,
+        };
+        return next;
+      });
+    });
+
+    const cleanupDone = window.electronAPI.onAILearningChatStreamDone(({ requestId, result }) => {
+      if (activeLearningRequestIdRef.current !== requestId) return;
+      activeLearningRequestIdRef.current = null;
+      setChatStreaming(false);
+
+      // Process tool calls
+      if (result.toolCalls && result.toolCalls.length > 0) {
+        void processLearningToolCalls(result.toolCalls);
+      }
+
+      // Finalize message
+      if (result.message) {
+        setMessages((prev) => {
+          const next = [...prev];
+          const assistantIndex = next.map((msg) => msg.role).lastIndexOf('assistant');
+
+          if (assistantIndex === -1) {
+            next.push({ role: 'assistant', content: result.message! });
+            return next;
+          }
+
+          if (next[assistantIndex].content.trim() === '' && result.message!.trim()) {
+            next[assistantIndex] = { role: 'assistant', content: result.message! };
+          }
+          return next;
+        });
+        void persistConversationMessage('assistant', result.message);
+      } else if (!result.toolCalls || result.toolCalls.length === 0) {
+        // No message and no tool calls - remove empty assistant message
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastIndex = next.length - 1;
+          if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.trim() === '') {
+            next.pop();
+          }
+          return next;
+        });
+      }
+    });
+
+    const cleanupError = window.electronAPI.onAILearningChatStreamError(({ requestId, error }) => {
+      if (activeLearningRequestIdRef.current !== requestId) return;
+      activeLearningRequestIdRef.current = null;
+      setChatStreaming(false);
+      setAssistantErrorMessage(`죄송해요, 오류가 발생했어요. (${error})`);
+    });
+
+    return () => {
+      cleanupDelta();
+      cleanupDone();
+      cleanupError();
+    };
+  }, [canUseLearningChatStream, persistConversationMessage, processLearningToolCalls]);
 
   useEffect(() => {
     return () => {
@@ -822,19 +1000,67 @@ export default function LevelTest({
     setHintsUsed((prev) => prev + 1);
 
     try {
+      // Learning mode: use learningChat with tool calling (streaming)
+      if (!isPlacementMode) {
+        if (canUseLearningChatStream) {
+          const requestId = `learning-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          activeLearningRequestIdRef.current = requestId;
+          setChatStreaming(true);
+
+          const started = await window.electronAPI.aiLearningChatStream(requestId, newMessages, code);
+
+          if (!started && activeLearningRequestIdRef.current === requestId) {
+            activeLearningRequestIdRef.current = null;
+            setChatStreaming(false);
+            setAssistantErrorMessage('죄송해요, 오류가 발생했어요.');
+          }
+        } else {
+          // Fallback to non-streaming
+          setChatStreaming(true);
+
+          const result = await window.electronAPI.aiLearningChat(newMessages, code);
+
+          setChatStreaming(false);
+
+          if (result.toolCalls && result.toolCalls.length > 0) {
+            await processLearningToolCalls(result.toolCalls);
+          }
+
+          if (result.message) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.trim() === '') {
+                next[lastIndex] = { role: 'assistant', content: result.message! };
+                return next;
+              }
+              return [...next, { role: 'assistant', content: result.message! }];
+            });
+            void persistConversationMessage('assistant', result.message, currentProblemId);
+          } else if (!result.toolCalls || result.toolCalls.length === 0) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.trim() === '') {
+                next.pop();
+              }
+              return next;
+            });
+          }
+        }
+
+        return;
+      }
+
+      // Placement mode: use regular chat with streaming
       const systemMessage: ChatMessage = {
         role: 'system',
-        content: currentProblem
-          ? `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다. 현재 학생이 다음 문제를 풀고 있습니다:
-문제 유형: ${currentProblem.type}
-문제: ${currentProblem.question}
-${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
+        content: `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다. 현재 학생이 다음 문제를 풀고 있습니다:
+문제 유형: ${currentProblem!.type}
+문제: ${currentProblem!.question}
+${currentProblem!.code ? `코드:\n${currentProblem!.code}` : ''}
 
-힌트를 제공하되, 직접적인 답은 알려주지 마세요. 친근하고 격려하는 말투로 대화하세요.`
-          : `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다.
-현재는 메인 학습 모드입니다.
-사용자와 자연스럽게 대화하며 C 학습을 도와주세요.
-필요하면 개념 설명, 코드 리뷰, 디버깅 가이드, 연습 문제 제안을 제공하세요.`,
+힌트를 제공하되, 직접적인 답은 알려주지 마세요. 친근하고 격려하는 말투로 대화하세요.`,
       };
 
       if (canUseChatStream) {

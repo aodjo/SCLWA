@@ -60,6 +60,22 @@ export interface SemiResponse {
   problem?: Problem;
 }
 
+/**
+ * Tool call from learning chat
+ */
+export interface LearningToolCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/**
+ * Result from learning chat - can include text response and/or tool calls
+ */
+export interface LearningChatResult {
+  message?: string;
+  toolCalls?: LearningToolCall[];
+}
+
 export interface SubmissionReviewInput {
   problemType: ProblemType;
   question: string;
@@ -110,6 +126,29 @@ export interface AIProvider {
    * @returns Promise resolving to final concatenated response
    */
   chatStream(messages: Message[], onDelta: (delta: string) => void): Promise<string>;
+
+  /**
+   * Learning mode chat with tool calling capabilities
+   *
+   * @param messages - Array of chat messages
+   * @param editorCode - Current code in editor (for read_editor tool)
+   * @returns Promise resolving to chat result with optional tool calls
+   */
+  learningChat(messages: Message[], editorCode: string): Promise<LearningChatResult>;
+
+  /**
+   * Learning mode chat with streaming and tool calling
+   *
+   * @param messages - Array of chat messages
+   * @param editorCode - Current code in editor
+   * @param onDelta - Callback for text chunks
+   * @returns Promise resolving to chat result with optional tool calls
+   */
+  learningChatStream(
+    messages: Message[],
+    editorCode: string,
+    onDelta: (delta: string) => void,
+  ): Promise<LearningChatResult>;
 
   /**
    * Reviews whether a submitted solution is legitimate or abusive

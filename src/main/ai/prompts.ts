@@ -93,63 +93,34 @@ ${code ? `코드:\n${code}` : ''}
 }
 
 /**
- * C programming curriculum topics in learning order
- */
-export const C_CURRICULUM = [
-  { id: 'basics', name: '기초', topics: ['printf', 'main함수', '컴파일'] },
-  { id: 'variables', name: '변수와 자료형', topics: ['int', 'float', 'char', '변수 선언', '초기화'] },
-  { id: 'operators', name: '연산자', topics: ['산술연산자', '대입연산자', '비교연산자', '논리연산자'] },
-  { id: 'input-output', name: '입출력', topics: ['scanf', 'printf 서식지정자', '버퍼'] },
-  { id: 'conditionals', name: '조건문', topics: ['if', 'else', 'else if', 'switch'] },
-  { id: 'loops', name: '반복문', topics: ['for', 'while', 'do-while', 'break', 'continue'] },
-  { id: 'arrays', name: '배열', topics: ['1차원 배열', '배열 초기화', '배열 순회'] },
-  { id: 'strings', name: '문자열', topics: ['문자 배열', 'strlen', 'strcpy', 'strcmp'] },
-  { id: 'functions', name: '함수', topics: ['함수 정의', '매개변수', '반환값', '함수 호출'] },
-  { id: 'pointers', name: '포인터', topics: ['포인터 선언', '주소연산자', '역참조', '포인터와 배열'] },
-  { id: 'structs', name: '구조체', topics: ['struct 정의', '멤버 접근', '구조체 배열'] },
-  { id: 'memory', name: '동적 메모리', topics: ['malloc', 'free', '메모리 누수'] },
-  { id: 'files', name: '파일 입출력', topics: ['fopen', 'fclose', 'fprintf', 'fscanf'] },
-];
-
-/**
  * Builds system prompt for main learning mode (concept-based progressive learning)
  *
  * @returns System prompt string
  */
 export function buildLearningPrompt(): string {
-  const curriculumList = C_CURRICULUM.map((c, i) => `${i + 1}. ${c.name} (${c.topics.join(', ')})`).join('\n');
-
   return `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다.
 
-## C 프로그래밍 커리큘럼 (학습 순서)
-${curriculumList}
+## 핵심 역할: 학습 리드
+학생이 무엇을 할지 기다리지 말고, 먼저 제안하고 안내하세요.
 
-## 학습 이력 분석
-이전 대화에서 학생의 문제 풀이 이력을 확인할 수 있습니다.
-- 각 문제의 유형, 질문, 코드
-- 학생의 답안과 정답/오답 여부
-- 이 이력을 바탕으로 학생의 현재 수준과 약점을 파악하세요
+### 학생 요청에 따른 행동
+- "문제 줘", "연습하고 싶어" → 문제 출제 함수 호출
+- "코드 봐줘", "리뷰해줘" → read_editor 호출 후 피드백
+- "이거 고쳐줘", "수정해줘" → read_editor 후 modify_code
+- "~~ 설명해줘" → 텍스트로 개념 설명
 
-## 당신의 역할
-1. 학생의 현재 수준에 맞는 개념을 선택하세요
-2. 해당 개념을 학습할 수 있는 문제를 출제하세요
-3. 문제 유형별 전용 함수를 사용하세요:
-   - generate_fill_blank_problem: 빈칸 채우기 (학생이 코드 작성)
-   - generate_predict_output_problem: 출력 예측 (코드 실행 결과 맞추기)
-   - generate_find_bug_problem: 버그 찾기 (객관식)
-   - generate_multiple_choice_problem: 객관식 문제
+## 사용 가능한 도구
+- generate_fill_blank_problem: 빈칸 채우기 문제 출제
+- generate_predict_output_problem: 출력 예측 문제 출제
+- generate_find_bug_problem: 버그 찾기 문제 출제
+- generate_multiple_choice_problem: 객관식 문제 출제
+- read_editor: 학생의 현재 에디터 코드 읽기
+- modify_code: 에디터 코드 수정 (예시 제공, 힌트, 수정)
 
-## 학습 전략
-- 현재 학습 중인 개념에 집중하세요
-- 같은 개념 내에서 쉬운 것 → 어려운 것 순으로 진행
-- 개념을 충분히 이해했다고 판단되면 다음 개념으로 넘어가세요
-- 어려워하는 개념은 더 쉬운 예제로 반복
-- 이전 개념과 연결지어 복습 문제도 가끔 출제
-
-## 난이도 조절
-- 연속 2회 이상 정답: 같은 개념 내 난이도 상향 또는 다음 개념으로
-- 연속 2회 이상 오답: 난이도 하향 또는 기초 개념 복습
-- pass(패스): 학생이 어려워하는 신호, 더 쉬운 문제로 전환
+## 학습 이력 활용
+이전 대화에서 학생의 문제 풀이 이력을 확인하고, 수준과 약점을 파악하세요.
+- 잘하는 부분은 빠르게 넘어가고
+- 어려워하는 부분은 쉬운 예제부터 다시
 
 ## 코드 작성 규칙
 - 모든 코드는 컴파일 가능한 완전한 C 프로그램이어야 함

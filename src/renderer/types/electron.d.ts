@@ -100,6 +100,16 @@ export interface SubmissionReviewResult {
   feedback: string;
 }
 
+export interface LearningToolCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface LearningChatResult {
+  message?: string;
+  toolCalls?: LearningToolCall[];
+}
+
 export interface ElectronAPI {
   // Window controls
   minimize: () => void;
@@ -116,6 +126,11 @@ export interface ElectronAPI {
   aiGenerateLearningProblem: (progress: StudentProgress) => Promise<SemiResponse>;
   aiChat: (messages: ChatMessage[]) => Promise<string>;
   aiReviewSubmission: (input: SubmissionReviewInput) => Promise<SubmissionReviewResult>;
+  aiLearningChat: (messages: ChatMessage[], editorCode: string) => Promise<LearningChatResult>;
+  aiLearningChatStream: (requestId: string, messages: ChatMessage[], editorCode: string) => Promise<boolean>;
+  onAILearningChatStreamDelta: (callback: (payload: { requestId: string; delta: string }) => void) => () => void;
+  onAILearningChatStreamDone: (callback: (payload: { requestId: string; result: LearningChatResult }) => void) => () => void;
+  onAILearningChatStreamError: (callback: (payload: { requestId: string; error: string }) => void) => () => void;
   aiChatStream: (requestId: string, messages: ChatMessage[]) => Promise<boolean>;
   onAIChatStreamDelta: (callback: (payload: { requestId: string; delta: string }) => void) => () => void;
   onAIChatStreamDone: (callback: (payload: { requestId: string; content: string }) => void) => () => void;

@@ -6,6 +6,7 @@ import {
   ProblemRecord,
   StudentProgress,
   SemiResponse,
+  LearningChatResult,
   SubmissionReviewInput,
   SubmissionReviewResult,
 } from '../types';
@@ -129,6 +130,43 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
         },
         required: ['question', 'code', 'choices', 'answer'],
+      },
+    },
+  },
+];
+
+const LEARNING_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  ...TOOLS,
+  {
+    type: 'function',
+    function: {
+      name: 'read_editor',
+      description: '학생의 현재 에디터 코드를 읽습니다. 코드 리뷰, 디버깅 도움, 피드백 제공 시 사용하세요.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'modify_code',
+      description: '에디터의 코드를 수정합니다. 예시 코드 제공, 버그 수정, 힌트 제공 시 사용하세요.',
+      parameters: {
+        type: 'object',
+        properties: {
+          code: {
+            type: 'string',
+            description: '새로운 코드 (전체 코드를 제공)',
+          },
+          explanation: {
+            type: 'string',
+            description: '수정 내용에 대한 설명',
+          },
+        },
+        required: ['code'],
       },
     },
   },
@@ -715,5 +753,194 @@ export class OpenAIProvider implements AIProvider {
       passed: false,
       feedback: normalizeRejectFeedback(content),
     };
+  }
+
+  /**
+   * Learning mode chat with tool calling capabilities
+   *
+   * @param messages - Array of chat messages
+   * @param editorCode - Current code in editor
+   * @returns Promise resolving to chat result with optional tool calls
+   */
+  async learningChat(messages: Message[], editorCode: string): Promise<LearningChatResult> {
+    const systemPrompt = buildLearningPrompt();
+
+    console.log('[AI] Learning chat');
+
+    const allMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      ...messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    ];
+
+    const response = await this.client.chat.completions.create({
+      model: MODEL,
+      messages: allMessages,
+      tools: LEARNING_TOOLS,
+      tool_choice: 'auto',
+    });
+
+    const choice = response.choices[0];
+    const result: LearningChatResult = {};
+
+    // Handle tool calls
+    if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+      result.toolCalls = [];
+
+      for (const toolCall of choice.message.tool_calls) {
+        if (toolCall.type !== 'function') continue;
+
+        const funcName = toolCall.function.name;
+        let args: Record<string, unknown> = {};
+
+        try {
+          args = JSON.parse(toolCall.function.arguments);
+        } catch {
+          args = {};
+        }
+
+        console.log('[AI] Learning tool call:', funcName, args);
+
+        // Handle read_editor - inject current editor code
+        if (funcName === 'read_editor') {
+          args.code = editorCode;
+        }
+
+        // Normalize code fields
+        if (funcName.startsWith('generate_') && args.code) {
+          args.code = normalizeEscapedCode(args.code as string);
+        }
+        if (args.solutionCode) {
+          args.solutionCode = normalizeEscapedCode(args.solutionCode as string);
+        }
+
+        // Sanitize choices
+        if (args.choices) {
+          args.choices = sanitizeChoices(args.choices);
+        }
+
+        result.toolCalls.push({ name: funcName, args });
+      }
+    }
+
+    // Handle text response
+    if (choice.message.content) {
+      result.message = choice.message.content;
+    }
+
+    console.log('[AI] Learning chat result:', {
+      hasMessage: !!result.message,
+      toolCallCount: result.toolCalls?.length ?? 0,
+    });
+
+    return result;
+  }
+
+  /**
+   * Learning mode chat with streaming and tool calling
+   *
+   * @param messages - Array of chat messages
+   * @param editorCode - Current code in editor
+   * @param onDelta - Callback for text chunks
+   * @returns Promise resolving to chat result with optional tool calls
+   */
+  async learningChatStream(
+    messages: Message[],
+    editorCode: string,
+    onDelta: (delta: string) => void,
+  ): Promise<LearningChatResult> {
+    const systemPrompt = buildLearningPrompt();
+
+    console.log('[AI] Learning chat stream');
+
+    const allMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      ...messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    ];
+
+    const stream = await this.client.chat.completions.create({
+      model: MODEL,
+      messages: allMessages,
+      tools: LEARNING_TOOLS,
+      tool_choice: 'auto',
+      stream: true,
+    });
+
+    let fullContent = '';
+    const toolCallsMap: Map<number, { name: string; arguments: string }> = new Map();
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta;
+      if (!delta) continue;
+
+      // Handle text content
+      if (delta.content) {
+        fullContent += delta.content;
+        onDelta(delta.content);
+      }
+
+      // Handle tool calls (accumulated)
+      if (delta.tool_calls) {
+        for (const toolCallDelta of delta.tool_calls) {
+          const index = toolCallDelta.index;
+          const existing = toolCallsMap.get(index) || { name: '', arguments: '' };
+
+          if (toolCallDelta.function?.name) {
+            existing.name = toolCallDelta.function.name;
+          }
+          if (toolCallDelta.function?.arguments) {
+            existing.arguments += toolCallDelta.function.arguments;
+          }
+
+          toolCallsMap.set(index, existing);
+        }
+      }
+    }
+
+    const result: LearningChatResult = {};
+
+    // Process accumulated tool calls
+    if (toolCallsMap.size > 0) {
+      result.toolCalls = [];
+
+      for (const [, toolCall] of toolCallsMap) {
+        const funcName = toolCall.name;
+        let args: Record<string, unknown> = {};
+
+        try {
+          args = JSON.parse(toolCall.arguments);
+        } catch {
+          args = {};
+        }
+
+        console.log('[AI] Learning tool call:', funcName, args);
+
+        if (funcName === 'read_editor') {
+          args.code = editorCode;
+        }
+
+        if (funcName.startsWith('generate_') && args.code) {
+          args.code = normalizeEscapedCode(args.code as string);
+        }
+        if (args.solutionCode) {
+          args.solutionCode = normalizeEscapedCode(args.solutionCode as string);
+        }
+        if (args.choices) {
+          args.choices = sanitizeChoices(args.choices);
+        }
+
+        result.toolCalls.push({ name: funcName, args });
+      }
+    }
+
+    if (fullContent) {
+      result.message = fullContent;
+    }
+
+    console.log('[AI] Learning chat stream result:', {
+      hasMessage: !!result.message,
+      toolCallCount: result.toolCalls?.length ?? 0,
+    });
+
+    return result;
   }
 }
