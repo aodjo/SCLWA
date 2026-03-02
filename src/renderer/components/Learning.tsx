@@ -502,6 +502,54 @@ export default function Learning() {
   }, [initializeAI, initializeLearning, loadConversationMessages]);
 
   /**
+   * Requests next problem from AI (internal, no user message shown)
+   *
+   * @param _currentProgress - Current student progress (unused, for future context)
+   */
+  const requestNextProblem = async (_currentProgress: StudentProgress) => {
+    if (chatStreaming) return;
+
+    // Silent request - AI generates next problem without showing user message
+    const request: ChatMessage[] = [
+      ...messages,
+      { role: 'user', content: '다음 문제 주세요!' },
+    ];
+
+    setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+    setChatStreaming(true);
+
+    try {
+      if (canUseLearningChatStream) {
+        const requestId = `learning-auto-next-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        activeLearningRequestIdRef.current = requestId;
+        await window.electronAPI.aiLearningChatStream(requestId, request, code);
+      } else {
+        const result = await window.electronAPI.aiLearningChat(request, code);
+        setChatStreaming(false);
+
+        if (result.toolCalls && result.toolCalls.length > 0) {
+          await processLearningToolCalls(result.toolCalls);
+        }
+        if (result.message) {
+          setMessages((prev) => {
+            const next = [...prev];
+            const lastIndex = next.length - 1;
+            if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.trim() === '') {
+              next[lastIndex] = { role: 'assistant', content: result.message! };
+              return next;
+            }
+            return [...next, { role: 'assistant', content: result.message! }];
+          });
+          void persistConversationMessage('assistant', result.message);
+        }
+      }
+    } catch (err) {
+      setChatStreaming(false);
+      setAssistantErrorMessage('죄송해요, 오류가 발생했어요.');
+    }
+  };
+
+  /**
    * Submits the current answer for grading
    */
   const submitAnswer = async () => {
@@ -724,6 +772,17 @@ ${code}
         return [...next, { role: 'assistant', content: feedbackMessage }];
       });
       void persistConversationMessage('assistant', feedbackMessage, currentProblem.id);
+
+      // If correct, automatically request next problem
+      if (finalCorrect) {
+        setSubmitting(false);
+        // Use setTimeout to allow state updates to complete
+        setTimeout(() => {
+          void requestNextProblem(updatedProgress);
+        }, 100);
+        return;
+      }
+
       setWaitingForNext(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit answer');
@@ -733,7 +792,7 @@ ${code}
   };
 
   /**
-   * Requests the next problem from AI
+   * Requests the next problem from AI (user-initiated)
    */
   const goToNextProblem = async () => {
     if (chatStreaming) return;
