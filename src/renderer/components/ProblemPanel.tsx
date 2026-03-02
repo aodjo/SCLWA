@@ -5,6 +5,7 @@ interface ProblemPanelProps {
   problem: Problem | null;
   selectedChoice?: number | null;
   onSelectChoice?: (index: number) => void;
+  choicesLocked?: boolean;
   predictAnswer?: string;
   onPredictAnswerChange?: (value: string) => void;
   waitingForNext?: boolean;
@@ -24,6 +25,7 @@ export default function ProblemPanel({
   problem,
   selectedChoice,
   onSelectChoice,
+  choicesLocked = false,
   predictAnswer,
   onPredictAnswerChange,
   waitingForNext,
@@ -89,10 +91,13 @@ export default function ProblemPanel({
               <button
                 key={index}
                 onClick={() => onSelectChoice?.(index)}
-                className={`text-left bg-white border rounded-md p-3 text-sm transition-colors cursor-pointer ${
+                disabled={choicesLocked}
+                className={`text-left bg-white border rounded-md p-3 text-sm transition-colors ${
                   selectedChoice === index
                     ? 'border-zinc-500 bg-zinc-100'
                     : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'
+                } ${choicesLocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'} ${
+                  choicesLocked && selectedChoice !== index ? 'hover:border-zinc-200 hover:bg-white' : ''
                 }`}
               >
                 <span className="text-zinc-500 mr-2 font-medium">{index + 1}.</span>

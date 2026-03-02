@@ -7,6 +7,53 @@ import tomorrowNight from '../themes/tomorrow-night.json';
 import Terminal, { TerminalHandle } from './Terminal';
 
 const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor[\w-]*\):\(([^)]+)\)\]\]/g;
+const GUIDE_ANCHOR_VALID_AT_START_REGEX = /^\[\[\(guide-anchor[\w-]*\):\([^)]+\)\]\]/;
+const GUIDE_ANCHOR_FRAGMENT_MARKERS = ['[[(guide-anchor', '[(guide-anchor', '[[guide-anchor'];
+
+function findNextGuideAnchorFragment(source: string, from: number): number {
+  let next = -1;
+  for (const marker of GUIDE_ANCHOR_FRAGMENT_MARKERS) {
+    const idx = source.indexOf(marker, from);
+    if (idx === -1) continue;
+    if (next === -1 || idx < next) next = idx;
+  }
+  return next;
+}
+
+function removeBrokenGuideAnchorFragments(source: string): string {
+  let cursor = 0;
+  let result = '';
+  let changed = false;
+
+  while (cursor < source.length) {
+    const start = findNextGuideAnchorFragment(source, cursor);
+    if (start === -1) {
+      result += source.slice(cursor);
+      break;
+    }
+
+    result += source.slice(cursor, start);
+
+    const tail = source.slice(start);
+    const valid = tail.match(GUIDE_ANCHOR_VALID_AT_START_REGEX);
+    if (valid) {
+      result += valid[0];
+      cursor = start + valid[0].length;
+      continue;
+    }
+
+    changed = true;
+
+    const lineBreak = source.indexOf('\n', start);
+    const close = source.indexOf(']]', start);
+    const fragmentEnd = close !== -1 && (lineBreak === -1 || close < lineBreak)
+      ? close + 2
+      : (lineBreak === -1 ? source.length : lineBreak);
+    cursor = fragmentEnd;
+  }
+
+  return changed ? result : source;
+}
 
 interface EditorPanelProps {
   code: string;
@@ -19,6 +66,7 @@ interface EditorPanelProps {
   waitingForNext?: boolean;
   readonly?: boolean;
   runnable?: boolean;
+  showConsole?: boolean;
   alertMessage?: string | null;
 }
 
@@ -42,6 +90,7 @@ export default function EditorPanel({
   waitingForNext,
   readonly,
   runnable = true,
+  showConsole = true,
   alertMessage,
 }: EditorPanelProps) {
   const { t } = useTranslation();
@@ -49,6 +98,8 @@ export default function EditorPanel({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
+  const sanitizingRef = useRef(false);
+  const showActionButtons = waitingForNext || !!onSubmit || !!onPass || !!onNext;
 
   /**
    * Applies guide-anchor decorations to the editor
@@ -103,6 +154,29 @@ export default function EditorPanel({
     applyGuideAnchorDecorations();
 
     editor.onDidChangeModelContent(() => {
+      const model = editor.getModel();
+      if (!model) return;
+
+      if (sanitizingRef.current) {
+        sanitizingRef.current = false;
+        applyGuideAnchorDecorations();
+        return;
+      }
+
+      const currentText = model.getValue();
+      const sanitizedText = removeBrokenGuideAnchorFragments(currentText);
+      if (sanitizedText !== currentText) {
+        sanitizingRef.current = true;
+        editor.executeEdits('sanitize-guide-anchor', [
+          {
+            range: model.getFullModelRange(),
+            text: sanitizedText,
+            forceMoveMarkers: true,
+          },
+        ]);
+        return;
+      }
+
       applyGuideAnchorDecorations();
     });
 
@@ -221,6 +295,38 @@ export default function EditorPanel({
     }
   }, [running]);
 
+  const renderActionButtons = (className: string) => (
+    <div className={className}>
+      {waitingForNext ? (
+        <button
+          onClick={onNext}
+          className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer"
+        >
+          {t('editor.next')}
+        </button>
+      ) : (
+        <>
+          {onPass && (
+            <button
+              onClick={onPass}
+              disabled={submitting}
+              className="px-4 py-1.5 text-sm bg-zinc-600 text-white rounded hover:bg-zinc-500 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {t('editor.pass')}
+            </button>
+          )}
+          <button
+            onClick={onSubmit}
+            disabled={submitting || submitDisabled}
+            className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {submitting ? t('editor.submitting') : t('editor.submit')}
+          </button>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex-1 flex flex-col bg-zinc-900">
       <div className="flex items-center justify-between px-2 py-1 border-b border-zinc-700 bg-zinc-800">
@@ -264,7 +370,7 @@ export default function EditorPanel({
         className="flex-1"
         autoSave="level-test-editor-vertical-panels"
       >
-        <Panel defaultSize="70%" minSize="30%">
+        <Panel defaultSize={showConsole ? '70%' : '100%'} minSize="30%">
           <div className="h-full relative">
             {alertMessage && (
               <div className="absolute right-3 top-3 z-20 rounded-md border border-red-400 bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg">
@@ -293,52 +399,28 @@ export default function EditorPanel({
           </div>
         </Panel>
 
-        <Separator className="resize-handle-horizontal" />
+        {showConsole && (
+          <>
+            <Separator className="resize-handle-horizontal" />
 
-        <Panel defaultSize="30%" minSize="15%">
-          <div className="h-full flex flex-col">
-            <div className="px-4 py-2 bg-zinc-800 border-b border-zinc-700">
-              <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
-            </div>
+            <Panel defaultSize="30%" minSize="15%">
+              <div className="h-full flex flex-col">
+                <div className="px-4 py-2 bg-zinc-800 border-b border-zinc-700">
+                  <span className="text-sm font-medium text-zinc-300">{t('editor.output')}</span>
+                </div>
 
-            <div className="flex-1 bg-zinc-800 overflow-hidden min-h-0">
-              <Terminal ref={terminalRef} onData={handleTerminalInput} />
-            </div>
+                <div className="flex-1 bg-zinc-800 overflow-hidden min-h-0">
+                  <Terminal ref={terminalRef} onData={handleTerminalInput} />
+                </div>
 
-            {(waitingForNext || !!onSubmit || !!onPass || !!onNext) && (
-              <div className="p-2 border-t border-zinc-700 flex justify-end gap-2">
-                {waitingForNext ? (
-                  <button
-                    onClick={onNext}
-                    className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer"
-                  >
-                    {t('editor.next')}
-                  </button>
-                ) : (
-                  <>
-                    {onPass && (
-                      <button
-                        onClick={onPass}
-                        disabled={submitting}
-                        className="px-4 py-1.5 text-sm bg-zinc-600 text-white rounded hover:bg-zinc-500 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {t('editor.pass')}
-                      </button>
-                    )}
-                    <button
-                      onClick={onSubmit}
-                      disabled={submitting || submitDisabled}
-                      className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      {submitting ? t('editor.submitting') : t('editor.submit')}
-                    </button>
-                  </>
-                )}
+                {showActionButtons && renderActionButtons('p-2 border-t border-zinc-700 flex justify-end gap-2')}
               </div>
-            )}
-          </div>
-        </Panel>
+            </Panel>
+          </>
+        )}
       </Group>
+
+      {!showConsole && showActionButtons && renderActionButtons('p-2 border-t border-zinc-700 bg-zinc-900 flex justify-end gap-2')}
     </div>
   );
 }

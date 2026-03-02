@@ -66,6 +66,7 @@ export default function LevelTest() {
   const isRunnable = currentProblem
     ? hasCode && (currentProblem.attachments?.runnable ?? (currentProblem.type === 'fill-blank'))
     : false;
+  const isChoiceProblem = !!(currentProblem?.attachments?.choices?.length);
   const submitDisabled = !!(currentProblem?.attachments?.choices?.length) && selectedChoice === null;
   const currentIndex = progress?.history.length ?? 0;
   const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
@@ -148,6 +149,12 @@ export default function LevelTest() {
     toastTimerRef.current = setTimeout(() => {
       setToastMessage(null);
     }, 1800);
+  };
+
+  const handleSelectChoice = (index: number) => {
+    if (!currentProblem) return;
+    if (isChoiceProblem && selectedChoice !== null) return;
+    setSelectedChoice(index);
   };
 
   /**
@@ -289,6 +296,7 @@ export default function LevelTest() {
       // Grade based on problem type
       switch (type) {
         case 'multiple-choice':
+        case 'find-bug':
           gradeResult = gradeMultipleChoice(selectedChoice, currentProblem.answer as number);
           break;
 
@@ -297,7 +305,6 @@ export default function LevelTest() {
           break;
 
         case 'fill-blank':
-        case 'find-bug':
           gradeResult = await gradeWithTestCases(code, currentProblem.testCases || []);
           break;
 
@@ -334,13 +341,17 @@ export default function LevelTest() {
       }
 
       if (!finalCorrect) {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: reviewFeedback || '오답이에요.' },
-        ]);
-        showToast('오답이에요.');
-        setWaitingForNext(false);
-        return;
+        if (isChoiceProblem) {
+          showToast('오답이에요. 선택이 잠겼습니다.');
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            { role: 'assistant', content: reviewFeedback || '오답이에요.' },
+          ]);
+          showToast('오답이에요.');
+          setWaitingForNext(false);
+          return;
+        }
       }
 
       const problemResult: ProblemResult = {
@@ -378,7 +389,9 @@ export default function LevelTest() {
         ? reviewFeedback
         : finalCorrect
           ? '🎉 정답이에요! 잘했어요.'
-          : `😢 아쉬워요. ${currentProblem.solutionCode ? '정답 코드를 확인해보세요.' : '다음에 다시 도전해봐요!'}`;
+          : isChoiceProblem
+            ? '오답이에요. 이번 선택은 최종 선택으로 잠겼습니다. 다음 문제를 눌러 진행하세요.'
+            : `😢 아쉬워요. ${currentProblem.solutionCode ? '정답 코드를 확인해보세요.' : '다음에 다시 도전해봐요!'}`;
       setMessages((prev) => [...prev, { role: 'assistant', content: feedbackMessage }]);
 
       if (updatedProgress.history.length >= TOTAL_PROBLEMS) {
@@ -538,7 +551,8 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
             <ProblemPanel
               problem={currentProblem}
               selectedChoice={selectedChoice}
-              onSelectChoice={setSelectedChoice}
+              onSelectChoice={handleSelectChoice}
+              choicesLocked={isChoiceProblem && selectedChoice !== null}
               predictAnswer={predictAnswer}
               onPredictAnswerChange={setPredictAnswer}
               waitingForNext={waitingForNext}
@@ -563,6 +577,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
                   waitingForNext={waitingForNext}
                   readonly={!isEditable}
                   runnable={isRunnable}
+                  showConsole={currentProblem?.type !== 'predict-output'}
                   alertMessage={toastMessage}
                 />
               </div>
