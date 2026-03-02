@@ -101,18 +101,19 @@ export default function LevelTest({
   const currentProblemRef = useRef<Problem | null>(null);
   const restoreOnceRef = useRef(false);
 
-  const showEditor = !!currentProblem;
+  const isPlacementMode = mode === 'level-test';
+  const showProblemPanel = isPlacementMode || !!currentProblem;
+  const showEditor = isPlacementMode ? !!currentProblem : true;
   const hasCode = !!currentProblem?.code;
   const isEditable = currentProblem
     ? (currentProblem.attachments?.editable ?? (currentProblem.type === 'fill-blank'))
-    : false;
+    : !isPlacementMode;
   const isRunnable = currentProblem
     ? hasCode && (currentProblem.attachments?.runnable ?? (currentProblem.type === 'fill-blank'))
-    : false;
+    : !isPlacementMode;
   const isChoiceProblem = !!(currentProblem?.attachments?.choices?.length);
   const submitDisabled = !!(currentProblem?.attachments?.choices?.length) && selectedChoice === null;
   const currentIndex = progress?.history.length ?? 0;
-  const isPlacementMode = mode === 'level-test';
   const isFinished = isPlacementMode && (finished || currentIndex >= TOTAL_PROBLEMS);
   const chatInputLocked = isPlacementMode;
   const canUseChatStream =
@@ -302,6 +303,17 @@ export default function LevelTest({
       setStarted(true);
 
       const savedProgress = await window.electronAPI.getStudentProgress();
+      if (!isPlacementMode) {
+        setProgress(savedProgress);
+        await loadConversationMessages(savedProgress.id);
+        setCurrentProblem(null);
+        setCode('');
+        setPredictAnswer('');
+        setSelectedChoice(null);
+        setWaitingForNext(false);
+        return;
+      }
+
       if (isPlacementMode && savedProgress.history.length >= TOTAL_PROBLEMS) {
         setProgress(savedProgress);
         await loadConversationMessages(savedProgress.id);
@@ -313,13 +325,6 @@ export default function LevelTest({
       if (savedProgress.history.length > 0) {
         setProgress(savedProgress);
         await loadConversationMessages(savedProgress.id);
-        await generateProblem(savedProgress);
-        return;
-      }
-
-      if (!isPlacementMode) {
-        setProgress(savedProgress);
-        setMessages([]);
         await generateProblem(savedProgress);
         return;
       }
@@ -342,6 +347,21 @@ export default function LevelTest({
     const restoreProgress = async () => {
       try {
         const savedProgress = await window.electronAPI.getStudentProgress();
+        if (!isPlacementMode) {
+          const initialized = await initializeAI();
+          if (!initialized) return;
+
+          setStarted(true);
+          setProgress(savedProgress);
+          await loadConversationMessages(savedProgress.id);
+          setCurrentProblem(null);
+          setCode('');
+          setPredictAnswer('');
+          setSelectedChoice(null);
+          setWaitingForNext(false);
+          return;
+        }
+
         if (isPlacementMode && savedProgress.history.length >= TOTAL_PROBLEMS) {
           setStarted(true);
           setFinished(true);
@@ -360,16 +380,6 @@ export default function LevelTest({
           await loadConversationMessages(savedProgress.id);
           await generateProblem(savedProgress);
           return;
-        }
-
-        if (!isPlacementMode) {
-          const initialized = await initializeAI();
-          if (!initialized) return;
-
-          setStarted(true);
-          setProgress(savedProgress);
-          await loadConversationMessages(savedProgress.id);
-          await generateProblem(savedProgress);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to restore progress');
@@ -667,22 +677,30 @@ export default function LevelTest({
    * @param message - User message
    */
   const handleSendMessage = async (message: string) => {
-    if (!currentProblem || chatStreaming || chatInputLocked) return;
+    if (chatStreaming || chatInputLocked) return;
+    if (isPlacementMode && !currentProblem) return;
+
+    const currentProblemId = currentProblem?.id;
 
     const newMessages: ChatMessage[] = [...messages, { role: 'user', content: message }];
     setMessages([...newMessages, { role: 'assistant', content: '' }]);
-    void persistConversationMessage('user', message, currentProblem.id);
+    void persistConversationMessage('user', message, currentProblemId);
     setHintsUsed((prev) => prev + 1);
 
     try {
       const systemMessage: ChatMessage = {
         role: 'system',
-        content: `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다. 현재 학생이 다음 문제를 풀고 있습니다:
+        content: currentProblem
+          ? `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다. 현재 학생이 다음 문제를 풀고 있습니다:
 문제 유형: ${currentProblem.type}
 문제: ${currentProblem.question}
 ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
 
-힌트를 제공하되, 직접적인 답은 알려주지 마세요. 친근하고 격려하는 말투로 대화하세요.`,
+힌트를 제공하되, 직접적인 답은 알려주지 마세요. 친근하고 격려하는 말투로 대화하세요.`
+          : `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다.
+현재는 메인 학습 모드입니다.
+사용자와 자연스럽게 대화하며 C 학습을 도와주세요.
+필요하면 개념 설명, 코드 리뷰, 디버깅 가이드, 연습 문제 제안을 제공하세요.`,
       };
 
       if (canUseChatStream) {
@@ -715,7 +733,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
           }
           return [...next, { role: 'assistant', content: response }];
         });
-        void persistConversationMessage('assistant', response, currentProblem.id);
+        void persistConversationMessage('assistant', response, currentProblemId);
       }
     } catch (err) {
       activeChatRequestIdRef.current = null;
@@ -808,40 +826,19 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
         className="h-full"
         autoSave="level-test-horizontal-panels"
       >
-        <Panel defaultSize={showEditor ? '33%' : '50%'} minSize="20%">
-          <div className="h-full flex flex-col">
-            <ProblemPanel
-              problem={currentProblem}
-              selectedChoice={selectedChoice}
-              onSelectChoice={handleSelectChoice}
-              choicesLocked={isChoiceProblem && (waitingForNext || submitting)}
-              predictAnswer={predictAnswer}
-              onPredictAnswerChange={setPredictAnswer}
-              waitingForNext={waitingForNext}
-              totalProblems={isPlacementMode ? TOTAL_PROBLEMS : undefined}
-            />
-          </div>
-        </Panel>
-
-        <Separator className="resize-handle" />
-
-        {showEditor && (
+        {showProblemPanel && (
           <>
-            <Panel defaultSize="33%" minSize="20%">
+            <Panel defaultSize={showEditor ? '33%' : '50%'} minSize="20%">
               <div className="h-full flex flex-col">
-                <EditorPanel
-                  code={code}
-                  onChange={setCode}
-                  onSubmit={submitAnswer}
-                  onPass={passCurrentProblem}
-                  onNext={goToNextProblem}
-                  submitting={submitting}
-                  submitDisabled={submitDisabled}
+                <ProblemPanel
+                  problem={currentProblem}
+                  selectedChoice={selectedChoice}
+                  onSelectChoice={handleSelectChoice}
+                  choicesLocked={isChoiceProblem && (waitingForNext || submitting)}
+                  predictAnswer={predictAnswer}
+                  onPredictAnswerChange={setPredictAnswer}
                   waitingForNext={waitingForNext}
-                  readonly={!isEditable}
-                  runnable={isRunnable}
-                  showConsole={currentProblem?.type !== 'predict-output'}
-                  alertMessage={toastMessage}
+                  totalProblems={isPlacementMode ? TOTAL_PROBLEMS : undefined}
                 />
               </div>
             </Panel>
@@ -849,7 +846,34 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
           </>
         )}
 
-        <Panel defaultSize={showEditor ? '34%' : '50%'} minSize="20%">
+        {showEditor && (
+          <>
+            <Panel defaultSize={showProblemPanel ? '33%' : '50%'} minSize="20%">
+              <div className="h-full flex flex-col">
+                <EditorPanel
+                  code={code}
+                  onChange={setCode}
+                  onSubmit={isPlacementMode ? submitAnswer : undefined}
+                  onPass={isPlacementMode ? passCurrentProblem : undefined}
+                  onNext={isPlacementMode ? goToNextProblem : undefined}
+                  submitting={isPlacementMode ? submitting : false}
+                  submitDisabled={isPlacementMode ? submitDisabled : false}
+                  waitingForNext={isPlacementMode ? waitingForNext : false}
+                  readonly={!isEditable}
+                  runnable={isRunnable}
+                  showConsole={isPlacementMode ? currentProblem?.type !== 'predict-output' : true}
+                  alertMessage={isPlacementMode ? toastMessage : null}
+                />
+              </div>
+            </Panel>
+            <Separator className="resize-handle" />
+          </>
+        )}
+
+        <Panel
+          defaultSize={showEditor ? (showProblemPanel ? '34%' : '50%') : (showProblemPanel ? '50%' : '100%')}
+          minSize="20%"
+        >
           <div className="h-full flex flex-col">
             <ChatPanel
               messages={messages}
