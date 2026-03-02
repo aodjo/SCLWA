@@ -8,11 +8,11 @@ export default {
     saveButton: '저장하기',
     loading: 'Loading...',
   },
-  levelTest: {
-    title: '레벨 테스트',
-    description: '세미가 5개의 문제를 출제할게요.\n실력에 맞는 학습을 시작하기 위한 테스트예요.',
-    startButton: '테스트 시작',
-    generating: '문제를 생성하고 있어요...',
+  learning: {
+    title: 'C 프로그래밍 학습',
+    description: '세미와 함께 C 프로그래밍을 배워봐요!\n대화하면서 문제도 풀고, 코드도 작성해봐요.',
+    startButton: '학습 시작',
+    generating: '준비 중이에요...',
     noApiKey: 'API 키가 설정되지 않았어요. 설정에서 API 키를 입력해주세요.',
     retry: '다시 시도',
   },
@@ -20,7 +20,6 @@ export default {
     title: 'AI 채팅',
     aiName: '세미',
     placeholder: '메시지를 입력해주세요...',
-    lockedPlaceholder: '레벨 테스트 중에는 채팅 입력이 비활성화됩니다',
     emptyMessage: '세미에게 질문해보세요!',
   },
   editor: {
