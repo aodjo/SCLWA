@@ -507,11 +507,11 @@ export class OpenAIProvider implements AIProvider {
    * @returns Promise resolving to Semi's response
    */
   async generateLearningProblem(progress: StudentProgress): Promise<SemiResponse> {
-    const systemPrompt = buildLearningPrompt(progress.studentSummary);
+    const systemPrompt = buildLearningPrompt();
     const historyConversation = buildHistoryConversation(progress.history);
 
     console.log('[AI] Generating learning problem');
-    console.log('[AI] Student summary:', progress.studentSummary || '(none)');
+    console.log('[AI] History length:', progress.history.length);
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
