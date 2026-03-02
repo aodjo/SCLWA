@@ -628,7 +628,6 @@ ${code}
           const result = await window.electronAPI.aiLearningChat(reviewMessages, code);
 
           // Process pass/reject tool calls
-          const generateToolCalls: LearningToolCall[] = [];
           if (result.toolCalls) {
             for (const toolCall of result.toolCalls) {
               if (toolCall.name === 'pass_submission') {
@@ -646,15 +645,12 @@ ${code}
                   input: { code },
                   output: { passed: false, reason: toolCall.args.reason, feedback: reviewFeedback },
                 });
-              } else if (toolCall.name.startsWith('generate_')) {
-                generateToolCalls.push(toolCall);
               }
             }
           }
 
-          // If passed and AI generated next problem, process it after saving record
-          if (finalCorrect && generateToolCalls.length > 0) {
-            // Save record first, then process new problem
+          // If passed, save record, show feedback, then request next problem
+          if (finalCorrect) {
             const record: ProblemRecord = {
               id: currentProblem.id,
               type: currentProblem.type,
@@ -680,7 +676,7 @@ ${code}
             setProgress(updatedProgress);
             await window.electronAPI.saveStudentProgress(updatedProgress);
 
-            // Replace "검토 중..." with actual feedback
+            // Replace "검토 중..." with feedback
             const feedbackContent = [reviewFeedback, result.message].filter(Boolean).join('\n\n') || '잘했어요!';
             setMessages((prev) => {
               const next = [...prev];
@@ -693,9 +689,11 @@ ${code}
             });
             void persistConversationMessage('assistant', feedbackContent, currentProblem.id);
 
-            // Process next problem generation
-            await processLearningToolCalls(generateToolCalls);
+            // Request next problem separately (faster UX)
             setSubmitting(false);
+            setTimeout(() => {
+              void requestNextProblem(updatedProgress);
+            }, 100);
             return;
           }
         } catch (reviewError) {
