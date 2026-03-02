@@ -1,6 +1,6 @@
 import type { TestResult } from '../types/electron.d.ts';
 
-const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor\):\([^)]+\)\]\]/g;
+const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor[\w-]*\):\([^)]+\)\]\]/g;
 
 /**
  * Strips guide-anchor markers from code

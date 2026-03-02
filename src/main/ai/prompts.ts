@@ -36,7 +36,7 @@ export function buildProblemPrompt(progress: StudentProgress, problemIndex: numb
 ## 문제 유형별 가이드
 
 ### fill-blank (빈칸 채우기)
-- 빈칸: [[(guide-anchor):(클릭하여 코드를 완성하세요)]] 형식
+- 빈칸: [[(guide-anchor):(클릭하여 코드를 완성하세요)]] 형식 (guide-anchor1, guide-anchor2 같은 접미사도 허용)
 - testCases 필수! (채점에 사용)
 - 문제 설명(question)은 정답 기준이 명확해야 함
 - "초기화 부분을 완성하세요" 같은 모호한 문구 금지

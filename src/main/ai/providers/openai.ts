@@ -28,7 +28,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           code: {
             type: 'string',
-            description: '빈칸이 포함된 코드. 빈칸은 [[(guide-anchor):(클릭하여 코드를 완성하세요)]] 형식으로 표시',
+            description: '빈칸이 포함된 코드. 빈칸은 [[(guide-anchor):(클릭하여 코드를 완성하세요)]] 또는 [[(guide-anchor1):(클릭하여 코드를 완성하세요)]] 형식으로 표시',
           },
           testCases: {
             type: 'array',
@@ -276,17 +276,20 @@ function normalizeEscapedCode(value: string): string {
   return out;
 }
 
-const GUIDE_ANCHOR_PATTERN = /\[\[\(guide-anchor\):\([^)]+\)\]\]/;
+const GUIDE_ANCHOR_PATTERN = /\[\[\(guide-anchor[\w-]*\):\([^)]+\)\]\]/;
+const NO_INPUT = '(no input)';
+const EXTRACTION_FAILED = '(failed to extract fill-blank answer)';
+const STRUCTURE_CHANGED = '(non-blank parts were modified)';
 
 function extractFillBlankContent(problemCode?: string, userCode?: string): string {
   const submitted = (userCode ?? '').replace(/\r\n/g, '\n');
-  if (!submitted.trim()) return '(미입력)';
-  if (!problemCode) return '(빈칸 답안 추출 실패)';
+  if (!submitted.trim()) return NO_INPUT;
+  if (!problemCode) return EXTRACTION_FAILED;
 
   const template = problemCode.replace(/\r\n/g, '\n');
   const match = template.match(GUIDE_ANCHOR_PATTERN);
   if (!match || typeof match.index !== 'number') {
-    return '(빈칸 답안 추출 실패)';
+    return EXTRACTION_FAILED;
   }
 
   const marker = match[0];
@@ -300,10 +303,10 @@ function extractFillBlankContent(problemCode?: string, userCode?: string): strin
     && submitted.length >= prefix.length + suffix.length
   ) {
     const filled = submitted.slice(prefix.length, submitted.length - suffix.length).trim();
-    return filled || '(미입력)';
+    return filled || NO_INPUT;
   }
 
-  return '(빈칸 외 코드 수정 또는 구조 변경)';
+  return STRUCTURE_CHANGED;
 }
 
 function buildHistoryConversation(history: ProblemRecord[]): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
@@ -311,13 +314,13 @@ function buildHistoryConversation(history: ProblemRecord[]): OpenAI.Chat.Complet
 
   for (const record of history) {
     const problemLines = [
-      `문제 ${record.id}`,
-      `유형: ${record.type}`,
-      `문제: ${record.question}`,
+      `Problem ${record.id}`,
+      `Type: ${record.type}`,
+      `Question: ${record.question}`,
     ];
 
     if (record.code) {
-      problemLines.push(`코드:\n${record.code}`);
+      problemLines.push(`Code:\n${record.code}`);
     }
 
     conversation.push({
@@ -325,7 +328,7 @@ function buildHistoryConversation(history: ProblemRecord[]): OpenAI.Chat.Complet
       content: problemLines.join('\n'),
     });
 
-    let userAttempt = '(미입력)';
+    let userAttempt = NO_INPUT;
     if (record.type === 'fill-blank') {
       userAttempt = extractFillBlankContent(record.code, record.userAnswer);
     } else if ((record.userAnswer ?? '').trim()) {
@@ -335,13 +338,13 @@ function buildHistoryConversation(history: ProblemRecord[]): OpenAI.Chat.Complet
     conversation.push({
       role: 'user',
       content: record.type === 'fill-blank'
-        ? `빈칸 답안:\n${userAttempt}`
-        : `답안:\n${userAttempt}`,
+        ? `Fill-blank answer:\n${userAttempt}`
+        : `Answer:\n${userAttempt}`,
     });
 
     conversation.push({
       role: 'assistant',
-      content: `채점 결과: ${record.correct ? '정답' : '오답'}`,
+      content: `Result: ${record.correct ? 'correct' : 'incorrect'}`,
     });
   }
 

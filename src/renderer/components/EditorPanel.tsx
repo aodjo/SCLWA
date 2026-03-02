@@ -7,7 +7,7 @@ import tomorrowNight from '../themes/tomorrow-night.json';
 import Terminal, { TerminalHandle } from './Terminal';
 
 const C_STANDARDS = ['C17', 'C11', 'C99'] as const;
-const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor\):\(([^)]+)\)\]\]/g;
+const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor[\w-]*\):\(([^)]+)\)\]\]/g;
 
 interface EditorPanelProps {
   code: string;

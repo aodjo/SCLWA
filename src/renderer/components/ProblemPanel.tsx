@@ -124,12 +124,12 @@ export default function ProblemPanel({
 
           {showPredictInput && !waitingForNext && (
             <div className="p-4">
-              <input
-                type="text"
+              <textarea
                 value={predictAnswer ?? ''}
                 onChange={(e) => onPredictAnswerChange?.(e.target.value)}
                 placeholder={t('problem.predictPlaceholder')}
-                className="w-full bg-white border border-zinc-200 rounded-md px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 placeholder:text-zinc-400"
+                rows={4}
+                className="w-full resize-y bg-white border border-zinc-200 rounded-md px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 placeholder:text-zinc-400"
               />
             </div>
           )}
