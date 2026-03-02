@@ -15,7 +15,7 @@ import {
   saveConversationMessage,
   resetStudentProgress,
 } from './database';
-import { aiAdapter, Message, StudentProgress, ProblemRecord, Problem, ProviderType, SubmissionReviewInput } from './ai';
+import { aiAdapter, Message, StudentProgress, ProblemRecord, Problem, ProviderType } from './ai';
 import { codeExecutor } from './docker';
 
 /**
@@ -129,17 +129,6 @@ ipcMain.handle('ai-generate-learning-problem', async (_, progress: StudentProgre
  */
 ipcMain.handle('ai-chat', async (_, messages: Message[]) => {
   return aiAdapter.chat(messages);
-});
-
-/**
- * IPC handler for solution abuse review
- *
- * @param _ - IPC event (unused)
- * @param input - Submission review payload
- * @returns Pass/reject review result
- */
-ipcMain.handle('ai-review-submission', async (_, input: SubmissionReviewInput) => {
-  return aiAdapter.reviewSubmission(input);
 });
 
 /**

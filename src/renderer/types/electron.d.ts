@@ -87,19 +87,6 @@ export interface SemiResponse {
   problem?: Problem;
 }
 
-export interface SubmissionReviewInput {
-  problemType: ProblemType;
-  question: string;
-  problemCode?: string;
-  userCode: string;
-  testCases: TestCase[];
-}
-
-export interface SubmissionReviewResult {
-  passed: boolean;
-  feedback: string;
-}
-
 export interface LearningToolCall {
   name: string;
   args: Record<string, unknown>;
@@ -124,7 +111,6 @@ export interface ElectronAPI {
   aiInit: (provider: string, apiKey: string) => Promise<boolean>;
   aiGenerateLearningProblem: (progress: StudentProgress) => Promise<SemiResponse>;
   aiChat: (messages: ChatMessage[]) => Promise<string>;
-  aiReviewSubmission: (input: SubmissionReviewInput) => Promise<SubmissionReviewResult>;
   aiLearningChat: (messages: ChatMessage[], editorCode: string) => Promise<LearningChatResult>;
   aiLearningChatStream: (requestId: string, messages: ChatMessage[], editorCode: string) => Promise<boolean>;
   onAILearningChatStreamDelta: (callback: (payload: { requestId: string; delta: string }) => void) => () => void;

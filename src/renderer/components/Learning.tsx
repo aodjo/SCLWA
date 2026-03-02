@@ -541,34 +541,56 @@ export default function Learning() {
       let finalCorrect = correct;
       let reviewFeedback: string | null = null;
 
-      // Review for abuse if docker tests passed
+      // Review for abuse if docker tests passed - use same AI context
       const dockerPassed = gradeResult.details?.testResults?.allPassed === true;
       const hasTestCases = (currentProblem.testCases?.length ?? 0) > 0;
       const needsAbuseReview = type === 'fill-blank' && hasTestCases && dockerPassed;
 
       if (needsAbuseReview) {
-        const reviewInput = {
-          problemType: currentProblem.type,
-          question: currentProblem.question,
-          problemCode: currentProblem.code,
-          userCode: code,
-          testCases: currentProblem.testCases || [],
+        const reviewRequest: ChatMessage = {
+          role: 'user',
+          content: `[시스템: 코드 검토 요청]
+학생이 제출한 코드가 테스트를 통과했습니다. 코드를 검토해서 pass_submission 또는 reject_submission 함수를 호출해주세요.
+
+문제: ${currentProblem.question}
+제출된 코드:
+\`\`\`c
+${code}
+\`\`\`
+
+- 문제 의도에 맞는 일반적인 해법이면 pass_submission
+- 하드코딩, 출력값 고정, 우회 등 어뷰징이면 reject_submission`,
         };
 
         try {
-          const review = await window.electronAPI.aiReviewSubmission(reviewInput);
-          reviewFeedback = review.feedback;
-          toolLog.push({
-            tool: 'aiReviewSubmission',
-            input: reviewInput,
-            output: review,
-          });
-          if (!review.passed) {
-            finalCorrect = false;
+          const reviewMessages = [...messages, reviewRequest];
+          const result = await window.electronAPI.aiLearningChat(reviewMessages, code);
+
+          // Process pass/reject tool calls
+          if (result.toolCalls) {
+            for (const toolCall of result.toolCalls) {
+              if (toolCall.name === 'pass_submission') {
+                reviewFeedback = (toolCall.args.feedback as string) || '잘했어요!';
+                toolLog.push({
+                  tool: 'pass_submission',
+                  input: { code },
+                  output: { passed: true, feedback: reviewFeedback },
+                });
+              } else if (toolCall.name === 'reject_submission') {
+                finalCorrect = false;
+                reviewFeedback = (toolCall.args.feedback as string) || '다시 시도해보세요.';
+                toolLog.push({
+                  tool: 'reject_submission',
+                  input: { code },
+                  output: { passed: false, reason: toolCall.args.reason, feedback: reviewFeedback },
+                });
+              }
+            }
           }
         } catch (reviewError) {
           console.error('[Learning] Submission review failed:', reviewError);
-          throw (reviewError instanceof Error ? reviewError : new Error(String(reviewError)));
+          // On error, default to pass (don't block student)
+          reviewFeedback = '잘했어요!';
         }
       }
 

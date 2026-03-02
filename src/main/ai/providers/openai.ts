@@ -7,8 +7,6 @@ import {
   StudentProgress,
   SemiResponse,
   LearningChatResult,
-  SubmissionReviewInput,
-  SubmissionReviewResult,
 } from '../types';
 import { buildLearningPrompt } from '../prompts';
 
@@ -170,20 +168,17 @@ const LEARNING_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
-];
-
-const REVIEW_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
       name: 'pass_submission',
-      description: '제출 코드가 문제 의도에 맞고 어뷰징이 아니면 통과 처리합니다.',
+      description: '학생 제출 코드가 문제 의도에 맞고 어뷰징이 아니면 통과 처리합니다. 테스트 통과 후 코드 검토 요청 시에만 사용하세요.',
       parameters: {
         type: 'object',
         properties: {
           feedback: {
             type: 'string',
-            description: '학습자에게 보여줄 짧은 피드백',
+            description: '학습자에게 보여줄 칭찬/피드백',
           },
         },
         required: ['feedback'],
@@ -194,13 +189,13 @@ const REVIEW_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'reject_submission',
-      description: '제출 코드가 하드코딩/우회/어뷰징이면 거절 처리합니다.',
+      description: '학생 제출 코드가 하드코딩/우회/어뷰징이면 거절 처리합니다. 테스트 통과 후 코드 검토 요청 시에만 사용하세요.',
       parameters: {
         type: 'object',
         properties: {
           reason: {
             type: 'string',
-            description: '거절 사유',
+            description: '거절 사유 (내부용)',
           },
           feedback: {
             type: 'string',
@@ -212,15 +207,6 @@ const REVIEW_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     },
   },
 ];
-
-const DEFAULT_REJECT_FEEDBACK = '값을 하드코딩하지 말고, 문제 조건을 만족하는 일반 해법을 작성하세요.';
-
-function normalizeRejectFeedback(raw: string): string {
-  const feedback = raw.trim();
-  if (!feedback) return DEFAULT_REJECT_FEEDBACK;
-  if (feedback.includes('하지 말고') && feedback.includes('하세요')) return feedback;
-  return `${feedback.replace(/[.!?]+$/g, '')} 하지 말고, 문제 조건을 만족하는 일반 해법을 작성하세요.`;
-}
 
 function shouldNormalizeEscapedCode(value: string): boolean {
   return value.includes('\\n') && !value.includes('\n');
@@ -586,74 +572,6 @@ export class OpenAIProvider implements AIProvider {
     }
 
     return fullText;
-  }
-
-  /**
-   * Reviews whether a submission is abusive or legitimate
-   *
-   * @param input - Submission payload
-   * @returns Pass/reject decision with user-facing feedback
-   */
-  async reviewSubmission(input: SubmissionReviewInput): Promise<SubmissionReviewResult> {
-    const systemPrompt = `당신은 C 코드 채점 무결성 심사관입니다.
-당신의 역할은 제출 코드가 문제 의도에 맞는 일반 해법인지, 테스트케이스만 맞추는 어뷰징인지 판정하는 것입니다.
-
-판정 기준:
-- pass_submission: 일반화 가능한 해법, 문제 의도와 일치
-- reject_submission: 하드코딩, 출력값/상수 고정, 입력 무시, 우회성 코드
-
-중요:
-- 반드시 pass_submission 또는 reject_submission 함수 중 하나를 호출하세요.
-- reject_submission.feedback는 반드시 "~~하지 말고, ~~하세요." 형태로 작성하세요.
-- 친절하되 단호하게 작성하세요.`;
-
-    const response = await this.client.chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        {
-          role: 'user',
-          content: `다음 제출을 심사하세요:\n${JSON.stringify(input, null, 2)}`,
-        },
-      ],
-      tools: REVIEW_TOOLS,
-      tool_choice: 'required',
-    });
-
-    const toolCalls = response.choices[0].message.tool_calls;
-    if (toolCalls) {
-      for (const toolCall of toolCalls) {
-        if (toolCall.type !== 'function') continue;
-
-        const args = JSON.parse(toolCall.function.arguments);
-        if (toolCall.function.name === 'pass_submission') {
-          return {
-            passed: true,
-            feedback: (args.feedback as string)?.trim() || '좋아요. 일반화 가능한 방식으로 잘 작성했어요.',
-          };
-        }
-
-        if (toolCall.function.name === 'reject_submission') {
-          return {
-            passed: false,
-            feedback: normalizeRejectFeedback((args.feedback as string) || (args.reason as string) || ''),
-          };
-        }
-      }
-    }
-
-    const content = response.choices[0].message.content?.trim() || '';
-    if (content.toLowerCase().includes('pass') || content.includes('통과')) {
-      return {
-        passed: true,
-        feedback: content || '좋아요. 일반화 가능한 방식으로 잘 작성했어요.',
-      };
-    }
-
-    return {
-      passed: false,
-      feedback: normalizeRejectFeedback(content),
-    };
   }
 
   /**

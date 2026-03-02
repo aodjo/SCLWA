@@ -76,19 +76,6 @@ export interface LearningChatResult {
   toolCalls?: LearningToolCall[];
 }
 
-export interface SubmissionReviewInput {
-  problemType: ProblemType;
-  question: string;
-  problemCode?: string;
-  userCode: string;
-  testCases: TestCase[];
-}
-
-export interface SubmissionReviewResult {
-  passed: boolean;
-  feedback: string;
-}
-
 /**
  * Common interface for AI providers
  */
@@ -140,12 +127,4 @@ export interface AIProvider {
     editorCode: string,
     onDelta: (delta: string) => void,
   ): Promise<LearningChatResult>;
-
-  /**
-   * Reviews whether a submitted solution is legitimate or abusive
-   *
-   * @param input - Submission payload to review
-   * @returns Pass/reject decision with feedback
-   */
-  reviewSubmission(input: SubmissionReviewInput): Promise<SubmissionReviewResult>;
 }
