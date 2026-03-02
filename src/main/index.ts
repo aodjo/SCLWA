@@ -110,18 +110,6 @@ ipcMain.handle('ai-init', (_, provider: ProviderType, apiKey: string) => {
 });
 
 /**
- * IPC handler to generate a level test problem
- *
- * @param _ - IPC event (unused)
- * @param progress - Student's current progress
- * @param problemIndex - Current problem number (1-5)
- * @returns Semi's response with message and/or problem
- */
-ipcMain.handle('ai-generate-level-test-problem', async (_, progress: StudentProgress, problemIndex: number) => {
-  return aiAdapter.generateLevelTestProblem(progress, problemIndex);
-});
-
-/**
  * IPC handler to generate a learning problem
  *
  * @param _ - IPC event (unused)

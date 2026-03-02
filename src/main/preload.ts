@@ -47,16 +47,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('ai-init', provider, apiKey),
 
   /**
-   * Generates a level test problem using AI
-   *
-   * @param progress - Student's current progress
-   * @param problemIndex - Current problem number (1-5)
-   * @returns Promise resolving to Semi's response
-   */
-  aiGenerateLevelTestProblem: (progress: unknown, problemIndex: number) =>
-    ipcRenderer.invoke('ai-generate-level-test-problem', progress, problemIndex),
-
-  /**
    * Generates a learning problem using AI
    *
    * @param progress - Student's current progress
