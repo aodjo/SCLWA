@@ -344,7 +344,7 @@ function buildHistoryConversation(history: ProblemRecord[]): OpenAI.Chat.Complet
 
     conversation.push({
       role: 'assistant',
-      content: `Result: ${record.correct ? 'correct' : 'incorrect'}`,
+      content: `Result: ${record.correct ? 'correct' : (userAttempt === NO_INPUT ? 'incorrect (pass)' : 'incorrect (attempted)')}`,
     });
   }
 
@@ -383,7 +383,9 @@ export class OpenAIProvider implements AIProvider {
       ...historyConversation,
       {
         role: 'user',
-        content: '다음 문제를 출제해주세요.',
+        content: `다음 문제를 출제해주세요.
+현재 순번: ${problemIndex}/5
+목표: 이전 결과를 바탕으로 학생 실력 경계를 탐색하는 문제를 선택하세요.`,
       },
     ];
 
