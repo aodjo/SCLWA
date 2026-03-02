@@ -27,7 +27,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           code: {
             type: 'string',
-            description: '빈칸이 포함된 코드. 빈칸은 ___짧은힌트___ (1-3단어). 문자열 안에 빈칸 금지! 예: for(___초기값___; ___조건___; ___증감___)',
+            description: '빈칸이 포함된 코드. 빈칸은 ___힌트___ 형식. 문자열 리터럴 안에 빈칸 금지. 예: for(int i=0; ___조건을 입력하세요___; i++)',
           },
           testCases: {
             type: 'array',
