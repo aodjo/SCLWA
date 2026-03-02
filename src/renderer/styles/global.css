@@ -1,9 +1,77 @@
 @import "tailwindcss";
 
+:root {
+  --sb-size: 10px;
+  --sb-track: #18181b;
+  --sb-thumb: #52525b;
+  --sb-thumb-hover: #71717a;
+  --sb-thumb-active: #a1a1aa;
+}
+
 body {
   @apply bg-zinc-950 text-zinc-50 min-h-screen;
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+/* Global custom scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sb-thumb) var(--sb-track);
+}
+
+*::-webkit-scrollbar {
+  width: var(--sb-size);
+  height: var(--sb-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: linear-gradient(180deg, #0f0f12 0%, var(--sb-track) 100%);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #63636f 0%, var(--sb-thumb) 100%);
+  border: 2px solid var(--sb-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #7f7f8d 0%, var(--sb-thumb-hover) 100%);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: var(--sb-thumb-active);
+}
+
+/* Monaco custom scrollbar (Monaco uses its own scrollbar UI) */
+.monaco-editor .scrollbar .slider {
+  background: linear-gradient(180deg, #63636f 0%, #52525b 100%) !important;
+  border-radius: 999px !important;
+}
+
+.monaco-editor .scrollbar .slider:hover {
+  background: linear-gradient(180deg, #7f7f8d 0%, #71717a 100%) !important;
+}
+
+/* Terminal (xterm) scrollbar */
+.xterm .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: #71717a #27272a;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: var(--sb-size);
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: #27272a;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7c7c8a 0%, #5f5f69 100%);
+  border: 2px solid #27272a;
+  border-radius: 999px;
 }
 
 /* Resizable panel separator - vertical */
