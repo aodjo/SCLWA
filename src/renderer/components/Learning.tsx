@@ -233,14 +233,8 @@ export default function Learning() {
   ) => {
     if (learningInitOnceRef.current) return;
 
-    const hasExistingInit = conversationRows.some((row) => {
-      if (row.sender !== 'assistant') return false;
-      if (!row.meta || typeof row.meta !== 'object') return false;
-      const meta = row.meta as { kind?: string };
-      return meta.kind === 'learning-initial-analysis';
-    });
-
-    if (hasExistingInit) {
+    // If there are existing conversation messages, don't reinitialize
+    if (conversationRows.length > 0) {
       learningInitOnceRef.current = true;
       return;
     }
@@ -431,8 +425,23 @@ export default function Learning() {
       const savedProgress = await window.electronAPI.getStudentProgress();
       setProgress(savedProgress);
       const rows = await loadConversationMessages(savedProgress.id);
-      setCurrentProblem(null);
-      setCode('');
+
+      // Restore current problem if exists
+      const currentProblemIndex = savedProgress.history.length + 1;
+      const cachedProblem = await window.electronAPI.getGeneratedProblem(
+        savedProgress.id,
+        currentProblemIndex,
+      );
+
+      if (cachedProblem) {
+        const sanitized = sanitizeProblemChoices(cachedProblem);
+        setCurrentProblem({ ...sanitized, id: currentProblemIndex });
+        setCode(sanitized.code || '');
+      } else {
+        setCurrentProblem(null);
+        setCode('');
+      }
+
       setPredictAnswer('');
       setSelectedChoice(null);
       setWaitingForNext(false);
@@ -461,8 +470,23 @@ export default function Learning() {
         const savedProgress = await window.electronAPI.getStudentProgress();
         setProgress(savedProgress);
         const rows = await loadConversationMessages(savedProgress.id);
-        setCurrentProblem(null);
-        setCode('');
+
+        // Restore current problem if exists
+        const currentProblemIndex = savedProgress.history.length + 1;
+        const cachedProblem = await window.electronAPI.getGeneratedProblem(
+          savedProgress.id,
+          currentProblemIndex,
+        );
+
+        if (cachedProblem) {
+          const sanitized = sanitizeProblemChoices(cachedProblem);
+          setCurrentProblem({ ...sanitized, id: currentProblemIndex });
+          setCode(sanitized.code || '');
+        } else {
+          setCurrentProblem(null);
+          setCode('');
+        }
+
         setPredictAnswer('');
         setSelectedChoice(null);
         setWaitingForNext(false);
