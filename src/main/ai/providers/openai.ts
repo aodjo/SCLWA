@@ -44,7 +44,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description: '정답 코드',
           },
         },
-        required: ['difficulty', 'question', 'code', 'testCases'],
+        required: ['difficulty', 'question', 'code', 'testCases', 'solutionCode'],
       },
     },
   },
@@ -143,41 +143,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description: '정답 인덱스 (0부터 시작)',
           },
         },
-        required: ['difficulty', 'question', 'choices', 'answer'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'send_message',
-      description: '사용자에게 메시지를 보냅니다 (격려, 힌트, 조언 등)',
-      parameters: {
-        type: 'object',
-        properties: {
-          message: {
-            type: 'string',
-            description: '사용자에게 보낼 메시지',
-          },
-        },
-        required: ['message'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'update_student_summary',
-      description: '학생 분석을 업데이트합니다 (강점, 약점, 학습 패턴 등)',
-      parameters: {
-        type: 'object',
-        properties: {
-          summary: {
-            type: 'string',
-            description: '학생 현재 상태 요약 (예: 포인터 개념에 약함, 반복문 이해도 높음)',
-          },
-        },
-        required: ['summary'],
+        required: ['difficulty', 'question', 'code', 'choices', 'answer'],
       },
     },
   },
@@ -209,8 +175,6 @@ export class OpenAIProvider implements AIProvider {
     const systemPrompt = buildProblemPrompt(progress, problemIndex);
 
     console.log('[AI] Generating problem for index:', problemIndex);
-    console.log('[AI] Student summary:', progress.studentSummary || '(none)');
-
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: '다음 문제를 출제해주세요.' },
@@ -220,7 +184,7 @@ export class OpenAIProvider implements AIProvider {
       model: MODEL,
       messages,
       tools: TOOLS,
-      tool_choice: 'auto',
+      tool_choice: 'required',
     });
 
     console.log('[AI] Response received');
@@ -272,10 +236,6 @@ export class OpenAIProvider implements AIProvider {
             answer: args.answer,
             attachments: { choices: args.choices },
           };
-        } else if (funcName === 'send_message') {
-          result.message = args.message;
-        } else if (funcName === 'update_student_summary') {
-          result.studentSummary = args.summary;
         }
       }
     }
@@ -284,13 +244,16 @@ export class OpenAIProvider implements AIProvider {
       result.message = choice.message.content;
     }
 
+    if (!result.problem) {
+      throw new Error('No problem generated');
+    }
+
     console.log('[AI] Result:');
     console.dir({
       hasProblem: !!result.problem,
       problemType: result.problem?.type,
       problemDifficulty: result.problem?.difficulty,
       hasMessage: !!result.message,
-      hasSummary: !!result.studentSummary,
     }, { colors: true, depth: null });
 
     return result;
@@ -312,5 +275,35 @@ export class OpenAIProvider implements AIProvider {
     });
 
     return response.choices[0].message.content ?? '';
+  }
+
+  /**
+   * Streams chat messages and emits text chunks as they arrive
+   *
+   * @param messages - Array of chat messages
+   * @param onDelta - Callback for each streamed chunk
+   * @returns Promise resolving to final accumulated response
+   */
+  async chatStream(messages: Message[], onDelta: (delta: string) => void): Promise<string> {
+    const stream = await this.client.chat.completions.create({
+      model: MODEL,
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      stream: true,
+    });
+
+    let fullText = '';
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? '';
+      if (!delta) continue;
+
+      fullText += delta;
+      onDelta(delta);
+    }
+
+    return fullText;
   }
 }

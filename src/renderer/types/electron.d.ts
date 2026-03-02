@@ -70,7 +70,6 @@ export interface TestResult {
 export interface SemiResponse {
   message?: string;
   problem?: Problem;
-  studentSummary?: string;
 }
 
 export interface ElectronAPI {
@@ -87,6 +86,10 @@ export interface ElectronAPI {
   aiInit: (provider: string, apiKey: string) => Promise<boolean>;
   aiGenerateProblem: (progress: StudentProgress, problemIndex: number) => Promise<SemiResponse>;
   aiChat: (messages: ChatMessage[]) => Promise<string>;
+  aiChatStream: (requestId: string, messages: ChatMessage[]) => Promise<boolean>;
+  onAIChatStreamDelta: (callback: (payload: { requestId: string; delta: string }) => void) => () => void;
+  onAIChatStreamDone: (callback: (payload: { requestId: string; content: string }) => void) => () => void;
+  onAIChatStreamError: (callback: (payload: { requestId: string; error: string }) => void) => () => void;
 
   // Student Progress
   getStudentProgress: () => Promise<StudentProgress>;

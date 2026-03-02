@@ -128,6 +128,31 @@ ipcMain.handle('ai-chat', async (_, messages: Message[]) => {
 });
 
 /**
+ * IPC handler for streaming AI chat response
+ *
+ * @param event - IPC event with sender for chunk streaming
+ * @param requestId - Client request ID for matching events
+ * @param messages - Chat messages
+ * @returns true when stream completes
+ */
+ipcMain.handle('ai-chat-stream', async (event, requestId: string, messages: Message[]) => {
+  const sender = event.sender;
+
+  try {
+    const finalText = await aiAdapter.chatStream(messages, (delta) => {
+      sender.send('ai-chat-stream-delta', { requestId, delta });
+    });
+
+    sender.send('ai-chat-stream-done', { requestId, content: finalText });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'AI stream failed';
+    sender.send('ai-chat-stream-error', { requestId, error: message });
+    return false;
+  }
+});
+
+/**
  * IPC handler to execute C code
  *
  * @param _ - IPC event (unused)

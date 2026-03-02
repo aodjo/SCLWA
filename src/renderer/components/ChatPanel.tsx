@@ -10,6 +10,7 @@ interface Message {
 interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
+  sending?: boolean;
 }
 
 /**
@@ -19,7 +20,7 @@ interface ChatPanelProps {
  * @param onSendMessage - Callback when user sends a message
  * @returns Chat panel component
  */
-export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
+export default function ChatPanel({ messages, onSendMessage, sending = false }: ChatPanelProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
 
@@ -30,7 +31,7 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
    */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || sending) return;
     onSendMessage(input);
     setInput('');
   };
@@ -72,12 +73,14 @@ export default function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
           <input
             type="text"
             value={input}
+            disabled={sending}
             onChange={(e) => setInput(e.target.value)}
             placeholder={t('chat.placeholder')}
             className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-50 outline-none focus:border-zinc-700 placeholder:text-zinc-600"
           />
           <button
             type="submit"
+            disabled={sending || !input.trim()}
             className="bg-zinc-800 rounded-md px-3 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-50 transition-colors cursor-pointer"
           >
             <BiSend />

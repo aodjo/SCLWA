@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import ProblemPanel from './ProblemPanel';
@@ -53,12 +53,74 @@ export default function LevelTest() {
   const [finished, setFinished] = useState(false);
   const [waitingForNext, setWaitingForNext] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chatStreaming, setChatStreaming] = useState(false);
+  const activeChatRequestIdRef = useRef<string | null>(null);
 
   const showEditor = !!currentProblem?.code;
   const isEditable = currentProblem?.attachments?.editable !== false;
   const isRunnable = currentProblem?.attachments?.runnable !== false;
   const currentIndex = progress?.history.length ?? 0;
   const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
+  const canUseChatStream =
+    typeof window.electronAPI.aiChatStream === 'function' &&
+    typeof window.electronAPI.onAIChatStreamDelta === 'function' &&
+    typeof window.electronAPI.onAIChatStreamDone === 'function' &&
+    typeof window.electronAPI.onAIChatStreamError === 'function';
+  const setAssistantErrorMessage = (content: string) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      const lastIndex = next.length - 1;
+      if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.trim() === '') {
+        next[lastIndex] = { role: 'assistant', content };
+        return next;
+      }
+      return [...next, { role: 'assistant', content }];
+    });
+  };
+
+  useEffect(() => {
+    if (!canUseChatStream) return;
+
+    const cleanupDelta = window.electronAPI.onAIChatStreamDelta(({ requestId, delta }) => {
+      if (activeChatRequestIdRef.current !== requestId) return;
+
+      setMessages((prev) => {
+        const next = [...prev];
+        const assistantIndex = next.map((msg) => msg.role).lastIndexOf('assistant');
+
+        if (assistantIndex === -1) {
+          next.push({ role: 'assistant', content: delta });
+          return next;
+        }
+
+        next[assistantIndex] = {
+          ...next[assistantIndex],
+          content: `${next[assistantIndex].content}${delta}`,
+        };
+        return next;
+      });
+    });
+
+    const cleanupDone = window.electronAPI.onAIChatStreamDone(({ requestId }) => {
+      if (activeChatRequestIdRef.current !== requestId) return;
+      activeChatRequestIdRef.current = null;
+      setChatStreaming(false);
+    });
+
+    const cleanupError = window.electronAPI.onAIChatStreamError(({ requestId, error }) => {
+      if (activeChatRequestIdRef.current !== requestId) return;
+
+      activeChatRequestIdRef.current = null;
+      setChatStreaming(false);
+      setAssistantErrorMessage(`죄송해요, 오류가 발생했어요. (${error})`);
+    });
+
+    return () => {
+      cleanupDelta();
+      cleanupDone();
+      cleanupError();
+    };
+  }, [canUseChatStream]);
 
   /**
    * Initializes AI provider and starts the test
@@ -105,12 +167,6 @@ export default function LevelTest() {
 
       console.log('[LevelTest] Response:', response);
       console.log('[LevelTest] Problem:', response.problem);
-
-      if (response.studentSummary) {
-        const updatedProgress = { ...currentProgress, studentSummary: response.studentSummary };
-        setProgress(updatedProgress);
-        await window.electronAPI.saveStudentProgress(updatedProgress);
-      }
 
       if (response.problem) {
         const problem = response.problem;
@@ -288,10 +344,10 @@ export default function LevelTest() {
    * @param message - User message
    */
   const handleSendMessage = async (message: string) => {
-    if (!currentProblem) return;
+    if (!currentProblem || chatStreaming) return;
 
     const newMessages: ChatMessage[] = [...messages, { role: 'user', content: message }];
-    setMessages(newMessages);
+    setMessages([...newMessages, { role: 'assistant', content: '' }]);
     setHintsUsed((prev) => prev + 1);
 
     try {
@@ -305,14 +361,41 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
 힌트를 제공하되, 직접적인 답은 알려주지 마세요. 친근하고 격려하는 말투로 대화하세요.`,
       };
 
-      const response = await window.electronAPI.aiChat([
-        systemMessage,
-        ...newMessages.map((m) => ({ role: m.role, content: m.content })),
-      ]);
+      if (canUseChatStream) {
+        const requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        activeChatRequestIdRef.current = requestId;
+        setChatStreaming(true);
 
-      setMessages((prev) => [...prev, { role: 'assistant', content: response }]);
+        const started = await window.electronAPI.aiChatStream(requestId, [
+          systemMessage,
+          ...newMessages.map((m) => ({ role: m.role, content: m.content })),
+        ]);
+
+        if (!started && activeChatRequestIdRef.current === requestId) {
+          activeChatRequestIdRef.current = null;
+          setChatStreaming(false);
+          setAssistantErrorMessage('죄송해요, 오류가 발생했어요.');
+        }
+      } else {
+        const response = await window.electronAPI.aiChat([
+          systemMessage,
+          ...newMessages.map((m) => ({ role: m.role, content: m.content })),
+        ]);
+
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastIndex = next.length - 1;
+          if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.trim() === '') {
+            next[lastIndex] = { role: 'assistant', content: response };
+            return next;
+          }
+          return [...next, { role: 'assistant', content: response }];
+        });
+      }
     } catch (err) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: '죄송해요, 오류가 발생했어요.' }]);
+      activeChatRequestIdRef.current = null;
+      setChatStreaming(false);
+      setAssistantErrorMessage('죄송해요, 오류가 발생했어요.');
     }
   };
 
@@ -414,7 +497,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
 
         <Panel defaultSize={showEditor ? '34%' : '50%'} minSize="20%">
           <div className="h-full flex flex-col">
-            <ChatPanel messages={messages} onSendMessage={handleSendMessage} />
+            <ChatPanel messages={messages} onSendMessage={handleSendMessage} sending={chatStreaming} />
           </div>
         </Panel>
       </Group>

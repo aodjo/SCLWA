@@ -53,7 +53,6 @@ export interface StudentProgress {
 export interface SemiResponse {
   message?: string;
   problem?: Problem;
-  studentSummary?: string;
 }
 
 /**
@@ -76,4 +75,13 @@ export interface AIProvider {
    * @returns Promise resolving to AI response string
    */
   chat(messages: Message[]): Promise<string>;
+
+  /**
+   * Streams chat response chunks as they are generated
+   *
+   * @param messages - Array of chat messages
+   * @param onDelta - Callback for each text chunk
+   * @returns Promise resolving to final concatenated response
+   */
+  chatStream(messages: Message[], onDelta: (delta: string) => void): Promise<string>;
 }

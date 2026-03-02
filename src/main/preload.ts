@@ -66,6 +66,52 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('ai-chat', messages),
 
   /**
+   * Starts streaming AI chat response
+   *
+   * @param requestId - Unique request identifier
+   * @param messages - Array of chat messages
+   * @returns Promise resolving to true on success
+   */
+  aiChatStream: (requestId: string, messages: { role: string; content: string }[]) =>
+    ipcRenderer.invoke('ai-chat-stream', requestId, messages),
+
+  /**
+   * Registers callback for AI chat stream text chunks
+   *
+   * @param callback - Function called with stream delta payload
+   * @returns Cleanup function to remove listener
+   */
+  onAIChatStreamDelta: (callback: (payload: { requestId: string; delta: string }) => void) => {
+    const handler = (_: unknown, payload: { requestId: string; delta: string }) => callback(payload);
+    ipcRenderer.on('ai-chat-stream-delta', handler);
+    return () => ipcRenderer.removeListener('ai-chat-stream-delta', handler);
+  },
+
+  /**
+   * Registers callback when AI chat stream completes
+   *
+   * @param callback - Function called with completion payload
+   * @returns Cleanup function to remove listener
+   */
+  onAIChatStreamDone: (callback: (payload: { requestId: string; content: string }) => void) => {
+    const handler = (_: unknown, payload: { requestId: string; content: string }) => callback(payload);
+    ipcRenderer.on('ai-chat-stream-done', handler);
+    return () => ipcRenderer.removeListener('ai-chat-stream-done', handler);
+  },
+
+  /**
+   * Registers callback when AI chat stream fails
+   *
+   * @param callback - Function called with error payload
+   * @returns Cleanup function to remove listener
+   */
+  onAIChatStreamError: (callback: (payload: { requestId: string; error: string }) => void) => {
+    const handler = (_: unknown, payload: { requestId: string; error: string }) => callback(payload);
+    ipcRenderer.on('ai-chat-stream-error', handler);
+    return () => ipcRenderer.removeListener('ai-chat-stream-error', handler);
+  },
+
+  /**
    * Executes C code in Docker container
    *
    * @param code - C source code

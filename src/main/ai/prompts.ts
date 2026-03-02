@@ -1,7 +1,5 @@
 import { StudentProgress } from './types';
 
-export const DIFFICULTY_LABELS = ['매우 쉬운', '쉬운', '보통', '어려운', '매우 어려운'];
-
 /**
  * Builds system prompt for problem generation based on student progress
  *
@@ -15,18 +13,18 @@ export function buildProblemPrompt(progress: StudentProgress, problemIndex: numb
     .map((p) => `- 문제${p.id}: ${p.type}, 난이도${p.difficulty}, ${p.correct ? '정답' : '오답'}`)
     .join('\n');
 
+  const hasHistory = progress.history.length > 0;
+  const contextLine = hasHistory
+    ? '최근 기록을 참고해 난이도와 유형을 조절하세요.'
+    : '첫 문제입니다. 난이도 1~2의 기본 문제로 시작하세요.';
+  const recentHistorySection = hasHistory ? `\n## 최근 기록\n${recentHistory}\n` : '';
+
   return `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다.
 
-## 학생 현재 상태
-${progress.studentSummary || '새로운 학생입니다. 아직 정보가 없습니다.'}
-
-## 진행 상황
-- 총 문제: ${progress.totalProblems}개
-- 정답: ${progress.totalCorrect}개
+## 컨텍스트
 - 현재 문제: ${problemIndex}/5
-
-## 최근 기록
-${recentHistory || '아직 풀이 기록이 없습니다.'}
+- ${contextLine}
+${recentHistorySection}
 
 ## 당신의 역할
 1. 학생의 수준에 맞는 문제를 출제하세요
@@ -35,10 +33,8 @@ ${recentHistory || '아직 풀이 기록이 없습니다.'}
    - generate_predict_output_problem: 출력 예측 (코드 실행 결과 맞추기)
    - generate_find_bug_problem: 버그 찾기 (객관식)
    - generate_multiple_choice_problem: 객관식 문제
-3. **반드시** send_message로 인사/격려/조언을 보내세요
-4. 2-3문제마다 update_student_summary로 학생 분석을 업데이트하세요
 
-## 코드 작성 규칙 (중요!)
+## 코드 작성 규칙
 - 모든 코드는 컴파일 가능한 완전한 C 프로그램이어야 함
 - 반드시 #include <stdio.h> 등 필요한 헤더 포함
 - 반드시 int main() 함수 포함
@@ -48,6 +44,9 @@ ${recentHistory || '아직 풀이 기록이 없습니다.'}
 ### fill-blank (빈칸 채우기)
 - 빈칸: [[(guide-anchor):(클릭하여 코드를 완성하세요)]] 형식
 - testCases 필수! (채점에 사용)
+- 문제 설명(question)은 정답 기준이 명확해야 함
+- "초기화 부분을 완성하세요" 같은 모호한 문구 금지
+- 질문에 목표 동작/출력을 구체적으로 명시
 예시:
 \`\`\`c
 #include <stdio.h>

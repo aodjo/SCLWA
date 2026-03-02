@@ -50,8 +50,10 @@ export default function ProblemPanel({
 
   const { attachments } = problem;
   const choices = attachments?.choices;
+  const testCases = problem.testCases ?? [];
   const isEditable = attachments?.editable;
   const showAnswerInput = choices || problem.type === 'predict-output' || !isEditable;
+  const showTestCases = testCases.length > 0;
 
   return (
     <div className="flex-1 flex flex-col bg-white">
@@ -68,6 +70,28 @@ export default function ProblemPanel({
         <div className="bg-zinc-100 border-l-4 border-zinc-400 p-4 mb-4">
           <p className="text-zinc-800 font-medium">{problem.question}</p>
         </div>
+
+        {showTestCases && (
+          <div className="mb-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+            <p className="text-sm font-semibold text-zinc-800 mb-1">{t('problem.testCasesTitle')}</p>
+            <p className="text-xs text-zinc-600 mb-2">{t('problem.testCasesHint')}</p>
+            <div className="flex flex-col gap-2">
+              {testCases.map((tc, index) => (
+                <div key={index} className="rounded border border-zinc-200 bg-white p-2">
+                  <p className="text-xs text-zinc-500 mb-1">#{index + 1}</p>
+                  <p className="text-xs text-zinc-700">
+                    <span className="font-semibold">{t('problem.inputLabel')}:</span>{' '}
+                    <code>{tc.input === '' ? t('problem.emptyInput') : tc.input}</code>
+                  </p>
+                  <p className="text-xs text-zinc-700 whitespace-pre-wrap">
+                    <span className="font-semibold">{t('problem.expectedLabel')}:</span>{' '}
+                    <code>{tc.expected}</code>
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
 
         {choices && choices.length > 0 && (

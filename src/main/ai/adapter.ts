@@ -68,6 +68,20 @@ export class AIAdapter {
     }
     return this.provider.chat(messages);
   }
+
+  /**
+   * Streams chat response using the active provider
+   *
+   * @param messages - Array of chat messages
+   * @param onDelta - Callback for each text chunk
+   * @returns Promise resolving to final AI response string
+   */
+  async chatStream(messages: Message[], onDelta: (delta: string) => void): Promise<string> {
+    if (!this.provider) {
+      throw new Error('No AI provider set');
+    }
+    return this.provider.chatStream(messages, onDelta);
+  }
 }
 
 export const aiAdapter = new AIAdapter();
