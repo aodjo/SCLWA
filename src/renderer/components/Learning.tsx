@@ -567,6 +567,7 @@ ${code}
           const result = await window.electronAPI.aiLearningChat(reviewMessages, code);
 
           // Process pass/reject tool calls
+          const generateToolCalls: LearningToolCall[] = [];
           if (result.toolCalls) {
             for (const toolCall of result.toolCalls) {
               if (toolCall.name === 'pass_submission') {
@@ -584,8 +585,54 @@ ${code}
                   input: { code },
                   output: { passed: false, reason: toolCall.args.reason, feedback: reviewFeedback },
                 });
+              } else if (toolCall.name.startsWith('generate_')) {
+                generateToolCalls.push(toolCall);
               }
             }
+          }
+
+          // If passed and AI generated next problem, process it after saving record
+          if (finalCorrect && generateToolCalls.length > 0) {
+            // Save record first, then process new problem
+            const record: ProblemRecord = {
+              id: currentProblem.id,
+              type: currentProblem.type,
+              question: currentProblem.question,
+              code: currentProblem.code,
+              correct: true,
+              userAnswer,
+              hintsUsed,
+              chatLog: messages,
+              toolLog,
+            };
+
+            await window.electronAPI.saveProblemRecord(progress.id, record);
+            await window.electronAPI.deleteGeneratedProblem(progress.id, currentProblem.id);
+
+            const updatedProgress: StudentProgress = {
+              ...progress,
+              totalProblems: progress.totalProblems + 1,
+              totalCorrect: progress.totalCorrect + 1,
+              history: [...progress.history, record],
+            };
+
+            setProgress(updatedProgress);
+            await window.electronAPI.saveStudentProgress(updatedProgress);
+
+            // Show feedback message
+            if (reviewFeedback) {
+              setMessages((prev) => [...prev, { role: 'assistant', content: reviewFeedback! }]);
+              void persistConversationMessage('assistant', reviewFeedback, currentProblem.id);
+            }
+            if (result.message) {
+              setMessages((prev) => [...prev, { role: 'assistant', content: result.message! }]);
+              void persistConversationMessage('assistant', result.message);
+            }
+
+            // Process next problem generation
+            await processLearningToolCalls(generateToolCalls);
+            setSubmitting(false);
+            return;
           }
         } catch (reviewError) {
           console.error('[Learning] Submission review failed:', reviewError);

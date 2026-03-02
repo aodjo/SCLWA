@@ -34,9 +34,10 @@ export function buildLearningPrompt(): string {
 
 ## 코드 검토 (pass/reject)
 "[시스템: 코드 검토 요청]" 메시지를 받으면:
-- 코드가 문제 의도에 맞는 일반적 해법 → pass_submission
-- 하드코딩, 출력값 고정, 테스트케이스만 맞추는 우회 → reject_submission
-- reject 시 feedback은 "~~하지 말고, ~~하세요" 형태로
+- 코드가 문제 의도에 맞는 일반적 해법 → pass_submission + 다음 문제 출제 (한 번에 두 함수 호출)
+- 하드코딩, 출력값 고정, 테스트케이스만 맞추는 우회 → reject_submission만 호출
+- pass 시: 칭찬 메시지 + pass_submission + generate_*_problem 세 개 같이
+- reject 시: feedback은 "~~하지 말고, ~~하세요" 형태로
 
 ## 학습 흐름
 1. 학생 수준에 맞는 문제 출제
