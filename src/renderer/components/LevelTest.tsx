@@ -32,6 +32,12 @@ interface ProblemResult {
 }
 
 const TOTAL_PROBLEMS = 5;
+export type LevelTestMode = 'level-test' | 'learning';
+
+interface LevelTestProps {
+  mode?: LevelTestMode;
+  onEnterLearning?: () => void;
+}
 
 function sanitizeChoiceText(choice: string): string {
   if (!choice) return '';
@@ -67,7 +73,10 @@ function sanitizeProblemChoices(problem: BaseProblem): BaseProblem {
  *
  * @returns Level test component with problem, editor, and chat panels
  */
-export default function LevelTest() {
+export default function LevelTest({
+  mode = 'level-test',
+  onEnterLearning,
+}: LevelTestProps) {
   const { t } = useTranslation();
   const [restoringProgress, setRestoringProgress] = useState(true);
   const [started, setStarted] = useState(false);
@@ -103,8 +112,9 @@ export default function LevelTest() {
   const isChoiceProblem = !!(currentProblem?.attachments?.choices?.length);
   const submitDisabled = !!(currentProblem?.attachments?.choices?.length) && selectedChoice === null;
   const currentIndex = progress?.history.length ?? 0;
-  const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
-  const chatInputLocked = true;
+  const isPlacementMode = mode === 'level-test';
+  const isFinished = isPlacementMode && (finished || currentIndex >= TOTAL_PROBLEMS);
+  const chatInputLocked = isPlacementMode;
   const canUseChatStream =
     typeof window.electronAPI.aiChatStream === 'function' &&
     typeof window.electronAPI.onAIChatStreamDelta === 'function' &&
@@ -277,7 +287,7 @@ export default function LevelTest() {
   }, [t]);
 
   /**
-   * Initializes AI provider and starts the test
+   * Initializes AI provider and starts the flow for current mode
    */
   const startTest = async () => {
     setLoading(true);
@@ -292,7 +302,7 @@ export default function LevelTest() {
       setStarted(true);
 
       const savedProgress = await window.electronAPI.getStudentProgress();
-      if (savedProgress.history.length >= TOTAL_PROBLEMS) {
+      if (isPlacementMode && savedProgress.history.length >= TOTAL_PROBLEMS) {
         setProgress(savedProgress);
         await loadConversationMessages(savedProgress.id);
         setResults(toProblemResults(savedProgress.history));
@@ -303,6 +313,13 @@ export default function LevelTest() {
       if (savedProgress.history.length > 0) {
         setProgress(savedProgress);
         await loadConversationMessages(savedProgress.id);
+        await generateProblem(savedProgress);
+        return;
+      }
+
+      if (!isPlacementMode) {
+        setProgress(savedProgress);
+        setMessages([]);
         await generateProblem(savedProgress);
         return;
       }
@@ -325,7 +342,7 @@ export default function LevelTest() {
     const restoreProgress = async () => {
       try {
         const savedProgress = await window.electronAPI.getStudentProgress();
-        if (savedProgress.history.length >= TOTAL_PROBLEMS) {
+        if (isPlacementMode && savedProgress.history.length >= TOTAL_PROBLEMS) {
           setStarted(true);
           setFinished(true);
           setProgress(savedProgress);
@@ -335,6 +352,17 @@ export default function LevelTest() {
         }
 
         if (savedProgress.history.length > 0) {
+          const initialized = await initializeAI();
+          if (!initialized) return;
+
+          setStarted(true);
+          setProgress(savedProgress);
+          await loadConversationMessages(savedProgress.id);
+          await generateProblem(savedProgress);
+          return;
+        }
+
+        if (!isPlacementMode) {
           const initialized = await initializeAI();
           if (!initialized) return;
 
@@ -352,7 +380,7 @@ export default function LevelTest() {
 
     void restoreProgress();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initializeAI, loadConversationMessages]);
+  }, [initializeAI, isPlacementMode, loadConversationMessages]);
 
   /**
    * Generates a problem using current progress
@@ -447,7 +475,7 @@ export default function LevelTest() {
     setProgress(updatedProgress);
     await window.electronAPI.saveStudentProgress(updatedProgress);
 
-    if (updatedProgress.history.length >= TOTAL_PROBLEMS) {
+    if (isPlacementMode && updatedProgress.history.length >= TOTAL_PROBLEMS) {
       setFinished(true);
       setSubmitting(false);
     } else {
@@ -613,7 +641,7 @@ export default function LevelTest() {
       setMessages((prev) => [...prev, { role: 'assistant', content: feedbackMessage }]);
       void persistConversationMessage('assistant', feedbackMessage, currentProblem.id);
 
-      if (updatedProgress.history.length >= TOTAL_PROBLEMS) {
+      if (isPlacementMode && updatedProgress.history.length >= TOTAL_PROBLEMS) {
         setFinished(true);
       } else {
         setWaitingForNext(true);
@@ -716,33 +744,8 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
     setToastMessage(null);
   };
 
-  const handleResultAction = async () => {
-    setLoading(true);
-    setError(null);
-    setFinished(false);
-    setWaitingForNext(false);
-    setCurrentProblem(null);
-    setPredictAnswer('');
-    setSelectedChoice(null);
-    setMessages([]);
-    setResults([]);
-
-    try {
-      const initialized = await initializeAI();
-      if (!initialized) {
-        setStarted(false);
-        return;
-      }
-
-      const newProgress = await window.electronAPI.resetStudentProgress();
-      setProgress(newProgress);
-      await generateProblem(newProgress);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start study');
-      setStarted(false);
-    } finally {
-      setLoading(false);
-    }
+  const handleResultAction = () => {
+    onEnterLearning?.();
   };
 
   if (restoringProgress) {
@@ -815,6 +818,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
               predictAnswer={predictAnswer}
               onPredictAnswerChange={setPredictAnswer}
               waitingForNext={waitingForNext}
+              totalProblems={isPlacementMode ? TOTAL_PROBLEMS : undefined}
             />
           </div>
         </Panel>

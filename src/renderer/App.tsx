@@ -4,8 +4,11 @@ import TitleBar from './components/TitleBar';
 import LevelTest from './components/LevelTest';
 import './types/electron.d.ts';
 
+type AppMode = 'level-test' | 'learning';
+
 function App() {
   const [showSettings, setShowSettings] = useState(true);
+  const [appMode, setAppMode] = useState<AppMode>('level-test');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,6 +20,11 @@ function App() {
       const configs = await window.electronAPI?.getAIConfigs();
       const hasValid = configs?.some((c) => c.enabled && c.apiKey?.trim());
       setShowSettings(!hasValid);
+
+      if (hasValid) {
+        const progress = await window.electronAPI.getStudentProgress();
+        setAppMode((progress.history?.length ?? 0) >= 5 ? 'learning' : 'level-test');
+      }
     } catch (error) {
       console.error('Failed to check settings:', error);
       setShowSettings(true);
@@ -43,7 +51,11 @@ function App() {
         {showSettings ? (
           <Settings onComplete={() => setShowSettings(false)} />
         ) : (
-          <LevelTest />
+          <LevelTest
+            key={appMode}
+            mode={appMode}
+            onEnterLearning={() => setAppMode('learning')}
+          />
         )}
       </div>
     </>

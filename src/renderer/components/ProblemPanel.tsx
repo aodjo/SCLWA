@@ -9,6 +9,7 @@ interface ProblemPanelProps {
   predictAnswer?: string;
   onPredictAnswerChange?: (value: string) => void;
   waitingForNext?: boolean;
+  totalProblems?: number;
 }
 
 /**
@@ -29,6 +30,7 @@ export default function ProblemPanel({
   predictAnswer,
   onPredictAnswerChange,
   waitingForNext,
+  totalProblems,
 }: ProblemPanelProps) {
   const { t } = useTranslation();
 
@@ -50,7 +52,9 @@ export default function ProblemPanel({
     <div className="flex-1 flex flex-col bg-white">
       <div className="p-4 border-b border-zinc-200">
         <span className="text-xs text-zinc-500">
-          {t('problem.progress', { current: problem.id, total: 5 })}
+          {typeof totalProblems === 'number'
+            ? t('problem.progress', { current: problem.id, total: totalProblems })
+            : t('problem.progressCurrent', { current: problem.id })}
         </span>
         <h2 className="text-xl font-bold text-zinc-800 mt-1">
           {t(`problem.types.${problem.type}`)}
