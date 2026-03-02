@@ -57,8 +57,9 @@ When you receive "[시스템: 코드 검토 요청]":
 ## Problem Type Guidelines
 
 ### fill-blank
-- Blank marker: ___ (exactly three underscores)
-- Example: for(int i = 0; ___; i++) - student fills in the condition
+- Blank format: ___hint___ (three underscores + hint text + three underscores)
+- Example: for(int i = 0; ___조건식을 입력하세요___; i++)
+- The hint describes what student should fill in
 - testCases required
 
 ### predict-output

@@ -27,7 +27,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           code: {
             type: 'string',
-            description: '빈칸이 포함된 코드. 빈칸은 ___ (밑줄 3개)로 표시. 예: for(int i = 0; ___; i++)',
+            description: '빈칸이 포함된 코드. 빈칸은 ___힌트___ 형식. 예: for(int i = 0; ___조건식___; i++)',
           },
           testCases: {
             type: 'array',
@@ -321,7 +321,7 @@ function sanitizeChoices(raw: unknown): string[] {
   });
 }
 
-const BLANK_MARKER_PATTERN = /___/;
+const BLANK_MARKER_PATTERN = /___[^_]+___/;
 const NO_INPUT = '(no input)';
 const EXTRACTION_FAILED = '(failed to extract fill-blank answer)';
 const STRUCTURE_CHANGED = '(non-blank parts were modified)';

@@ -6,9 +6,8 @@ import type { editor } from 'monaco-editor';
 import tomorrowNight from '../themes/tomorrow-night.json';
 import Terminal, { TerminalHandle } from './Terminal';
 
-// Simple blank marker: ___ (three underscores)
-const BLANK_MARKER = '___';
-const BLANK_MARKER_REGEX = /___/g;
+// Blank marker format: ___hint___ (e.g., ___조건식___)
+const BLANK_MARKER_REGEX = /___([^_]+)___/g;
 
 /**
  * Normalizes blank markers (for backwards compatibility with old format)
@@ -17,10 +16,10 @@ const BLANK_MARKER_REGEX = /___/g;
  * @returns Code with normalized blank markers
  */
 export function normalizeGuideAnchors(code: string): string {
-  // Convert old format to new simple format
+  // Convert old guide-anchor format to new ___hint___ format
   return code
-    .replace(/\[\[\s*\(guide-anchor[\w-]*\)\s*:\s*\([^)]*\)\s*\]\]/g, BLANK_MARKER)
-    .replace(/\[\[\s*guide-anchor[^\]]*\]\]/g, BLANK_MARKER);
+    .replace(/\[\[\s*\(guide-anchor[\w-]*\)\s*:\s*\(([^)]*)\)\s*\]\]/g, '___$1___')
+    .replace(/\[\[\s*guide-anchor[^\]]*\]\]/g, '___빈칸___');
 }
 
 interface EditorPanelProps {
@@ -84,10 +83,10 @@ export default function EditorPanel({
     const decorations: editor.IModelDeltaDecoration[] = [];
 
     let match;
-    const regex = new RegExp(BLANK_MARKER, 'g');
+    const regex = /___([^_]+)___/g;
     while ((match = regex.exec(text)) !== null) {
       const startPos = model.getPositionAt(match.index);
-      const endPos = model.getPositionAt(match.index + BLANK_MARKER.length);
+      const endPos = model.getPositionAt(match.index + match[0].length);
 
       decorations.push({
         range: {
@@ -132,10 +131,11 @@ export default function EditorPanel({
       const position = e.target.position;
       const lineContent = model.getLineContent(position.lineNumber);
 
-      const blankIndex = lineContent.indexOf(BLANK_MARKER);
-      if (blankIndex !== -1) {
-        const startCol = blankIndex + 1;
-        const endCol = startCol + BLANK_MARKER.length;
+      // Match ___hint___ pattern
+      const blankMatch = lineContent.match(/___([^_]+)___/);
+      if (blankMatch && blankMatch.index !== undefined) {
+        const startCol = blankMatch.index + 1;
+        const endCol = startCol + blankMatch[0].length;
 
         if (position.column >= startCol && position.column <= endCol) {
           model.pushEditOperations(
