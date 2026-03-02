@@ -212,20 +212,6 @@ export default function Learning() {
           setCurrentProblem({ ...sanitized, id: problemIndex });
           setCode(sanitized.code || '');
           setPredictAnswer('');
-
-          // Add problem question as chat message
-          const questionMessage = sanitized.question;
-          setMessages((prev) => {
-            // Replace empty assistant message or add new one
-            const next = [...prev];
-            const lastIndex = next.length - 1;
-            if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.trim() === '') {
-              next[lastIndex] = { role: 'assistant', content: questionMessage };
-              return next;
-            }
-            return [...next, { role: 'assistant', content: questionMessage }];
-          });
-          void persistConversationMessage('assistant', questionMessage, problemIndex);
           setSelectedChoice(null);
           setHintsUsed(0);
           setWaitingForNext(false);
