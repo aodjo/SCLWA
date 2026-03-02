@@ -528,7 +528,11 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
 
   return (
     <div className="h-[calc(100vh-2rem)] relative">
-      <Group orientation="horizontal" className="h-full">
+      <Group
+        orientation="horizontal"
+        className="h-full"
+        autoSave="level-test-horizontal-panels"
+      >
         <Panel defaultSize={showEditor ? '33%' : '50%'} minSize="20%">
           <div className="h-full flex flex-col">
             <ProblemPanel

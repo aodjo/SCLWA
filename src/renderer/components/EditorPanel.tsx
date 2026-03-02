@@ -259,7 +259,11 @@ export default function EditorPanel({
         </div>
       </div>
 
-      <Group orientation="vertical" className="flex-1">
+      <Group
+        orientation="vertical"
+        className="flex-1"
+        autoSave="level-test-editor-vertical-panels"
+      >
         <Panel defaultSize="70%" minSize="30%">
           <div className="h-full relative">
             {alertMessage && (
