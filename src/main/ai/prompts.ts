@@ -57,8 +57,8 @@ When you receive "[시스템: 코드 검토 요청]":
 ## Problem Type Guidelines
 
 ### fill-blank
-- Blank format (EXACT, no extra spaces): [[(guide-anchor):(클릭하여 코드를 완성하세요)]]
-- WRONG: [[ (guide-anchor) ]] or [[ (guide-anchor):(text) ]] (no spaces inside brackets!)
+- Blank marker: ___ (exactly three underscores)
+- Example: for(int i = 0; ___; i++) - student fills in the condition
 - testCases required
 
 ### predict-output

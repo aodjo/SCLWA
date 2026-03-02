@@ -23,11 +23,11 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         properties: {
           question: {
             type: 'string',
-            description: '문제 설명(자연어만). [[(guide-anchor...)]], ID 규칙, placeholder 문법 설명을 question에 쓰지 말 것',
+            description: '문제 설명 (자연어만)',
           },
           code: {
             type: 'string',
-            description: '빈칸이 포함된 코드. anchor ID는 guide-anchor 또는 guide-anchorN만 허용 (예: [[(guide-anchor):(클릭하여 코드를 완성하세요)]], [[(guide-anchor1):(클릭하여 코드를 완성하세요)]]) . ans1 같은 임의 ID 금지',
+            description: '빈칸이 포함된 코드. 빈칸은 ___ (밑줄 3개)로 표시. 예: for(int i = 0; ___; i++)',
           },
           testCases: {
             type: 'array',
@@ -321,7 +321,7 @@ function sanitizeChoices(raw: unknown): string[] {
   });
 }
 
-const GUIDE_ANCHOR_PATTERN = /\[\[\(guide-anchor[\w-]*\):\([^)]+\)\]\]/;
+const BLANK_MARKER_PATTERN = /___/;
 const NO_INPUT = '(no input)';
 const EXTRACTION_FAILED = '(failed to extract fill-blank answer)';
 const STRUCTURE_CHANGED = '(non-blank parts were modified)';
@@ -332,12 +332,12 @@ function extractFillBlankContent(problemCode?: string, userCode?: string): strin
   if (!problemCode) return EXTRACTION_FAILED;
 
   const template = problemCode.replace(/\r\n/g, '\n');
-  const match = template.match(GUIDE_ANCHOR_PATTERN);
+  const match = template.match(BLANK_MARKER_PATTERN);
   if (!match || typeof match.index !== 'number') {
     return EXTRACTION_FAILED;
   }
 
-  const marker = match[0];
+  const marker = match[0];  // "___"
   const markerStart = match.index;
   const prefix = template.slice(0, markerStart);
   const suffix = template.slice(markerStart + marker.length);

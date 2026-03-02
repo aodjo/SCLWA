@@ -94,23 +94,11 @@ body {
   @apply bg-zinc-500;
 }
 
-/* Monaco editor guide-anchor - hide original text */
-.guide-anchor-hidden {
-  font-size: 0 !important;
-  opacity: 0 !important;
-}
-
-/* Monaco editor guide-anchor - styled button */
-.guide-anchor-button {
-  font-size: 14px !important;
+/* Monaco editor blank marker (___)  */
+.blank-marker {
   background-color: #0ea5e9;
   color: #ffffff !important;
-  padding: 2px 12px;
-  border-radius: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
   cursor: pointer;
-  font-weight: 500;
-}
-
-.guide-anchor-button:hover {
-  background-color: #0284c7;
 }

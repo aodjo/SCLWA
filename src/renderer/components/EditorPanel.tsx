@@ -6,67 +6,21 @@ import type { editor } from 'monaco-editor';
 import tomorrowNight from '../themes/tomorrow-night.json';
 import Terminal, { TerminalHandle } from './Terminal';
 
-const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor[\w-]*\):\(([^)]+)\)\]\]/g;
-const GUIDE_ANCHOR_VALID_AT_START_REGEX = /^\[\[\(guide-anchor[\w-]*\):\([^)]+\)\]\]/;
-const GUIDE_ANCHOR_FRAGMENT_MARKERS = ['[[(guide-anchor', '[(guide-anchor', '[[guide-anchor', '[[ (guide-anchor'];
+// Simple blank marker: ___ (three underscores)
+const BLANK_MARKER = '___';
+const BLANK_MARKER_REGEX = /___/g;
 
 /**
- * Normalizes guide anchor markers by removing extra whitespace
+ * Normalizes blank markers (for backwards compatibility with old format)
  *
- * @param code - Source code with potentially malformed guide anchors
- * @returns Normalized code with proper guide anchor format
+ * @param code - Source code
+ * @returns Code with normalized blank markers
  */
 export function normalizeGuideAnchors(code: string): string {
-  // Fix [[ (guide-anchor) : (text) ]] -> [[(guide-anchor):(text)]]
-  return code.replace(
-    /\[\[\s*\(\s*(guide-anchor[\w-]*)\s*\)\s*:\s*\(\s*([^)]+?)\s*\)\s*\]\]/g,
-    '[[($1):($2)]]'
-  );
-}
-
-function findNextGuideAnchorFragment(source: string, from: number): number {
-  let next = -1;
-  for (const marker of GUIDE_ANCHOR_FRAGMENT_MARKERS) {
-    const idx = source.indexOf(marker, from);
-    if (idx === -1) continue;
-    if (next === -1 || idx < next) next = idx;
-  }
-  return next;
-}
-
-function removeBrokenGuideAnchorFragments(source: string): string {
-  let cursor = 0;
-  let result = '';
-  let changed = false;
-
-  while (cursor < source.length) {
-    const start = findNextGuideAnchorFragment(source, cursor);
-    if (start === -1) {
-      result += source.slice(cursor);
-      break;
-    }
-
-    result += source.slice(cursor, start);
-
-    const tail = source.slice(start);
-    const valid = tail.match(GUIDE_ANCHOR_VALID_AT_START_REGEX);
-    if (valid) {
-      result += valid[0];
-      cursor = start + valid[0].length;
-      continue;
-    }
-
-    changed = true;
-
-    const lineBreak = source.indexOf('\n', start);
-    const close = source.indexOf(']]', start);
-    const fragmentEnd = close !== -1 && (lineBreak === -1 || close < lineBreak)
-      ? close + 2
-      : (lineBreak === -1 ? source.length : lineBreak);
-    cursor = fragmentEnd;
-  }
-
-  return changed ? result : source;
+  // Convert old format to new simple format
+  return code
+    .replace(/\[\[\s*\(guide-anchor[\w-]*\)\s*:\s*\([^)]*\)\s*\]\]/g, BLANK_MARKER)
+    .replace(/\[\[\s*guide-anchor[^\]]*\]\]/g, BLANK_MARKER);
 }
 
 interface EditorPanelProps {
@@ -118,9 +72,9 @@ export default function EditorPanel({
   const showActionButtons = waitingForNext || !!onSubmit || !!onPass || !!onNext;
 
   /**
-   * Applies guide-anchor decorations to the editor
+   * Applies blank marker decorations to the editor
    */
-  const applyGuideAnchorDecorations = useCallback(() => {
+  const applyBlankDecorations = useCallback(() => {
     if (!editorRef.current) return;
 
     const model = editorRef.current.getModel();
@@ -130,10 +84,10 @@ export default function EditorPanel({
     const decorations: editor.IModelDeltaDecoration[] = [];
 
     let match;
-    while ((match = GUIDE_ANCHOR_REGEX.exec(text)) !== null) {
+    const regex = new RegExp(BLANK_MARKER, 'g');
+    while ((match = regex.exec(text)) !== null) {
       const startPos = model.getPositionAt(match.index);
-      const endPos = model.getPositionAt(match.index + match[0].length);
-      const labelText = match[1];
+      const endPos = model.getPositionAt(match.index + BLANK_MARKER.length);
 
       decorations.push({
         range: {
@@ -143,11 +97,7 @@ export default function EditorPanel({
           endColumn: endPos.column,
         },
         options: {
-          inlineClassName: 'guide-anchor-hidden',
-          before: {
-            content: labelText,
-            inlineClassName: 'guide-anchor-button',
-          },
+          inlineClassName: 'blank-marker',
           hoverMessage: { value: '클릭하여 코드를 입력하세요' },
         },
       });
@@ -167,33 +117,10 @@ export default function EditorPanel({
 
     monaco.editor.defineTheme('tomorrow-night', tomorrowNight as editor.IStandaloneThemeData);
     monaco.editor.setTheme('tomorrow-night');
-    applyGuideAnchorDecorations();
+    applyBlankDecorations();
 
     editor.onDidChangeModelContent(() => {
-      const model = editor.getModel();
-      if (!model) return;
-
-      if (sanitizingRef.current) {
-        sanitizingRef.current = false;
-        applyGuideAnchorDecorations();
-        return;
-      }
-
-      const currentText = model.getValue();
-      const sanitizedText = removeBrokenGuideAnchorFragments(currentText);
-      if (sanitizedText !== currentText) {
-        sanitizingRef.current = true;
-        editor.executeEdits('sanitize-guide-anchor', [
-          {
-            range: model.getFullModelRange(),
-            text: sanitizedText,
-            forceMoveMarkers: true,
-          },
-        ]);
-        return;
-      }
-
-      applyGuideAnchorDecorations();
+      applyBlankDecorations();
     });
 
     editor.onMouseDown((e) => {
@@ -205,12 +132,10 @@ export default function EditorPanel({
       const position = e.target.position;
       const lineContent = model.getLineContent(position.lineNumber);
 
-      const match = GUIDE_ANCHOR_REGEX.exec(lineContent);
-      GUIDE_ANCHOR_REGEX.lastIndex = 0;
-
-      if (match) {
-        const startCol = match.index + 1;
-        const endCol = startCol + match[0].length;
+      const blankIndex = lineContent.indexOf(BLANK_MARKER);
+      if (blankIndex !== -1) {
+        const startCol = blankIndex + 1;
+        const endCol = startCol + BLANK_MARKER.length;
 
         if (position.column >= startCol && position.column <= endCol) {
           model.pushEditOperations(
@@ -232,7 +157,7 @@ export default function EditorPanel({
         }
       }
     });
-  }, [applyGuideAnchorDecorations]);
+  }, [applyBlankDecorations]);
 
   useEffect(() => {
     const cleanupStdout = window.electronAPI.onDockerStdout((data) => {
@@ -264,10 +189,10 @@ export default function EditorPanel({
   };
 
   /**
-   * Strips guide-anchor markers from code
+   * Strips blank markers from code before execution
    */
-  const stripGuideAnchors = (sourceCode: string): string => {
-    return sourceCode.replace(GUIDE_ANCHOR_REGEX, '');
+  const stripBlankMarkers = (sourceCode: string): string => {
+    return sourceCode.replace(BLANK_MARKER_REGEX, '');
   };
 
   /**
@@ -279,7 +204,7 @@ export default function EditorPanel({
     terminalRef.current?.writeln(`\x1b[36m${t('editor.processStarted')}\x1b[0m`);
     terminalRef.current?.focus();
 
-    const cleanCode = stripGuideAnchors(code);
+    const cleanCode = stripBlankMarkers(code);
     const result = await window.electronAPI.dockerExecuteInteractive(cleanCode);
 
     if (!result.success) {
