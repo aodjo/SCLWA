@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import ProblemPanel from './ProblemPanel';
-import EditorPanel from './EditorPanel';
+import EditorPanel, { normalizeGuideAnchors } from './EditorPanel';
 import ChatPanel from './ChatPanel';
 import {
   gradeMultipleChoice,
@@ -173,10 +173,12 @@ export default function Learning() {
         let problem: BaseProblem | null = null;
 
         if (name === 'generate_fill_blank_problem') {
+          // Normalize guide anchors to fix AI spacing issues
+          const normalizedCode = normalizeGuideAnchors(args.code as string);
           problem = {
             type: 'fill-blank',
             question: args.question as string,
-            code: args.code as string,
+            code: normalizedCode,
             testCases: args.testCases as { input: string; expected: string }[],
             solutionCode: args.solutionCode as string,
             attachments: { editable: true, runnable: true },

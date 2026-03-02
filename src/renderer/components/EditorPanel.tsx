@@ -8,7 +8,21 @@ import Terminal, { TerminalHandle } from './Terminal';
 
 const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor[\w-]*\):\(([^)]+)\)\]\]/g;
 const GUIDE_ANCHOR_VALID_AT_START_REGEX = /^\[\[\(guide-anchor[\w-]*\):\([^)]+\)\]\]/;
-const GUIDE_ANCHOR_FRAGMENT_MARKERS = ['[[(guide-anchor', '[(guide-anchor', '[[guide-anchor'];
+const GUIDE_ANCHOR_FRAGMENT_MARKERS = ['[[(guide-anchor', '[(guide-anchor', '[[guide-anchor', '[[ (guide-anchor'];
+
+/**
+ * Normalizes guide anchor markers by removing extra whitespace
+ *
+ * @param code - Source code with potentially malformed guide anchors
+ * @returns Normalized code with proper guide anchor format
+ */
+export function normalizeGuideAnchors(code: string): string {
+  // Fix [[ (guide-anchor) : (text) ]] -> [[(guide-anchor):(text)]]
+  return code.replace(
+    /\[\[\s*\(\s*(guide-anchor[\w-]*)\s*\)\s*:\s*\(\s*([^)]+?)\s*\)\s*\]\]/g,
+    '[[($1):($2)]]'
+  );
+}
 
 function findNextGuideAnchorFragment(source: string, from: number): number {
   let next = -1;
