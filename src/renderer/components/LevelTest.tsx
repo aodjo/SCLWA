@@ -53,12 +53,18 @@ export default function LevelTest() {
   const [finished, setFinished] = useState(false);
   const [waitingForNext, setWaitingForNext] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [chatStreaming, setChatStreaming] = useState(false);
   const activeChatRequestIdRef = useRef<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showEditor = !!currentProblem?.code;
-  const isEditable = currentProblem?.attachments?.editable !== false;
-  const isRunnable = currentProblem?.attachments?.runnable !== false;
+  const isEditable = currentProblem
+    ? (currentProblem.attachments?.editable ?? (currentProblem.type === 'fill-blank'))
+    : false;
+  const isRunnable = currentProblem
+    ? (currentProblem.attachments?.runnable ?? (currentProblem.type === 'fill-blank'))
+    : false;
   const currentIndex = progress?.history.length ?? 0;
   const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
   const canUseChatStream =
@@ -121,6 +127,26 @@ export default function LevelTest() {
       cleanupError();
     };
   }, [canUseChatStream]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 1800);
+  };
 
   /**
    * Initializes AI provider and starts the test
@@ -209,7 +235,6 @@ export default function LevelTest() {
     const record: ProblemRecord = {
       id: currentProblem.id,
       type: currentProblem.type,
-      difficulty: currentProblem.difficulty,
       question: currentProblem.question,
       code: currentProblem.code,
       correct: false,
@@ -306,11 +331,12 @@ export default function LevelTest() {
         }
       }
 
-      if (needsAbuseReview && !finalCorrect) {
+      if (!finalCorrect) {
         setMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: reviewFeedback || '제출이 거절되었습니다. 코드를 수정해서 다시 제출하세요.' },
+          { role: 'assistant', content: reviewFeedback || '오답이에요.' },
         ]);
+        showToast('오답이에요.');
         setWaitingForNext(false);
         return;
       }
@@ -326,7 +352,6 @@ export default function LevelTest() {
       const record: ProblemRecord = {
         id: currentProblem.id,
         type: currentProblem.type,
-        difficulty: currentProblem.difficulty,
         question: currentProblem.question,
         code: currentProblem.code,
         correct: finalCorrect,
@@ -452,6 +477,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
     setSubmitting(false);
     setFinished(false);
     setError(null);
+    setToastMessage(null);
   };
 
   if (!started) {
@@ -499,7 +525,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
   }
 
   return (
-    <div className="h-[calc(100vh-2rem)]">
+    <div className="h-[calc(100vh-2rem)] relative">
       <Group orientation="horizontal" className="h-full">
         <Panel defaultSize={showEditor ? '33%' : '50%'} minSize="20%">
           <div className="h-full flex flex-col">
@@ -524,7 +550,18 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
           <>
             <Panel defaultSize="33%" minSize="20%">
               <div className="h-full flex flex-col">
-                <EditorPanel code={code} onChange={setCode} onSubmit={submitAnswer} onPass={passCurrentProblem} onNext={goToNextProblem} submitting={submitting} waitingForNext={waitingForNext} readonly={!isEditable} runnable={isRunnable} />
+                <EditorPanel
+                  code={code}
+                  onChange={setCode}
+                  onSubmit={submitAnswer}
+                  onPass={passCurrentProblem}
+                  onNext={goToNextProblem}
+                  submitting={submitting}
+                  waitingForNext={waitingForNext}
+                  readonly={!isEditable}
+                  runnable={isRunnable}
+                  alertMessage={toastMessage}
+                />
               </div>
             </Panel>
             <Separator className="resize-handle" />

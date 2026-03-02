@@ -3,6 +3,7 @@ import {
   AIProvider,
   Message,
   Problem,
+  ProblemRecord,
   StudentProgress,
   SemiResponse,
   SubmissionReviewInput,
@@ -10,7 +11,7 @@ import {
 } from '../types';
 import { buildProblemPrompt } from '../prompts';
 
-const MODEL = 'gpt-4o-mini';
+const MODEL = 'gpt-5-mini-2025-08-07';
 
 const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
@@ -21,12 +22,6 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          difficulty: {
-            type: 'number',
-            minimum: 1,
-            maximum: 5,
-            description: '난이도 1-5',
-          },
           question: {
             type: 'string',
             description: '문제 설명',
@@ -52,7 +47,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description: '정답 코드',
           },
         },
-        required: ['difficulty', 'question', 'code', 'testCases', 'solutionCode'],
+        required: ['question', 'code', 'testCases', 'solutionCode'],
       },
     },
   },
@@ -64,12 +59,6 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          difficulty: {
-            type: 'number',
-            minimum: 1,
-            maximum: 5,
-            description: '난이도 1-5',
-          },
           question: {
             type: 'string',
             description: '문제 설명 (예: "이 코드의 출력값은?")',
@@ -79,7 +68,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description: '완전한 실행 가능 코드 (빈칸 없음)',
           },
         },
-        required: ['difficulty', 'question', 'code'],
+        required: ['question', 'code'],
       },
     },
   },
@@ -91,12 +80,6 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-            difficulty: {
-              type: 'number',
-              minimum: 1,
-              maximum: 5,
-              description: '난이도 1-5',
-            },
           question: {
             type: 'string',
             description: '문제 설명',
@@ -115,7 +98,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description: '정답 인덱스 (0부터 시작)',
           },
         },
-        required: ['difficulty', 'question', 'code', 'choices', 'answer'],
+        required: ['question', 'code', 'choices', 'answer'],
       },
     },
   },
@@ -127,12 +110,6 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          difficulty: {
-            type: 'number',
-            minimum: 1,
-            maximum: 5,
-            description: '난이도 1-5',
-          },
           question: {
             type: 'string',
             description: '문제 설명',
@@ -151,7 +128,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description: '정답 인덱스 (0부터 시작)',
           },
         },
-        required: ['difficulty', 'question', 'code', 'choices', 'answer'],
+        required: ['question', 'code', 'choices', 'answer'],
       },
     },
   },
@@ -207,6 +184,170 @@ function normalizeRejectFeedback(raw: string): string {
   return `${feedback.replace(/[.!?]+$/g, '')} 하지 말고, 문제 조건을 만족하는 일반 해법을 작성하세요.`;
 }
 
+function shouldNormalizeEscapedCode(value: string): boolean {
+  return value.includes('\\n') && !value.includes('\n');
+}
+
+/**
+ * Restores escaped multiline code blobs without breaking escapes inside C literals.
+ * - Converts \n/\r/\t and escaped quotes only when they appear outside string/char literals.
+ * - Leaves escapes inside "..." and '...' untouched (e.g. "%d\\n").
+ */
+function normalizeEscapedCode(value: string): string {
+  if (!shouldNormalizeEscapedCode(value)) return value;
+
+  let out = '';
+  let inDouble = false;
+  let inSingle = false;
+  let literalEscaped = false;
+
+  for (let i = 0; i < value.length; i += 1) {
+    const ch = value[i];
+    const next = value[i + 1];
+
+    if (inDouble || inSingle) {
+      out += ch;
+
+      if (literalEscaped) {
+        literalEscaped = false;
+        continue;
+      }
+
+      if (ch === '\\') {
+        literalEscaped = true;
+        continue;
+      }
+
+      if (inDouble && ch === '"') {
+        inDouble = false;
+      } else if (inSingle && ch === '\'') {
+        inSingle = false;
+      }
+      continue;
+    }
+
+    if (ch === '\\') {
+      if (next === 'n') {
+        out += '\n';
+        i += 1;
+        continue;
+      }
+
+      if (next === 'r') {
+        if (value[i + 2] === '\\' && value[i + 3] === 'n') {
+          out += '\n';
+          i += 3;
+          continue;
+        }
+        out += '\r';
+        i += 1;
+        continue;
+      }
+
+      if (next === 't') {
+        out += '\t';
+        i += 1;
+        continue;
+      }
+
+      if (next === '"') {
+        out += '"';
+        inDouble = true;
+        i += 1;
+        continue;
+      }
+
+      if (next === '\'') {
+        out += '\'';
+        inSingle = true;
+        i += 1;
+        continue;
+      }
+    }
+
+    out += ch;
+    if (ch === '"') {
+      inDouble = true;
+    } else if (ch === '\'') {
+      inSingle = true;
+    }
+  }
+
+  return out;
+}
+
+const GUIDE_ANCHOR_PATTERN = /\[\[\(guide-anchor\):\([^)]+\)\]\]/;
+
+function extractFillBlankContent(problemCode?: string, userCode?: string): string {
+  const submitted = (userCode ?? '').replace(/\r\n/g, '\n');
+  if (!submitted.trim()) return '(미입력)';
+  if (!problemCode) return '(빈칸 답안 추출 실패)';
+
+  const template = problemCode.replace(/\r\n/g, '\n');
+  const match = template.match(GUIDE_ANCHOR_PATTERN);
+  if (!match || typeof match.index !== 'number') {
+    return '(빈칸 답안 추출 실패)';
+  }
+
+  const marker = match[0];
+  const markerStart = match.index;
+  const prefix = template.slice(0, markerStart);
+  const suffix = template.slice(markerStart + marker.length);
+
+  if (
+    submitted.startsWith(prefix)
+    && submitted.endsWith(suffix)
+    && submitted.length >= prefix.length + suffix.length
+  ) {
+    const filled = submitted.slice(prefix.length, submitted.length - suffix.length).trim();
+    return filled || '(미입력)';
+  }
+
+  return '(빈칸 외 코드 수정 또는 구조 변경)';
+}
+
+function buildHistoryConversation(history: ProblemRecord[]): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+  const conversation: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+
+  for (const record of history) {
+    const problemLines = [
+      `문제 ${record.id}`,
+      `유형: ${record.type}`,
+      `문제: ${record.question}`,
+    ];
+
+    if (record.code) {
+      problemLines.push(`코드:\n${record.code}`);
+    }
+
+    conversation.push({
+      role: 'assistant',
+      content: problemLines.join('\n'),
+    });
+
+    let userAttempt = '(미입력)';
+    if (record.type === 'fill-blank') {
+      userAttempt = extractFillBlankContent(record.code, record.userAnswer);
+    } else if ((record.userAnswer ?? '').trim()) {
+      userAttempt = record.userAnswer;
+    }
+
+    conversation.push({
+      role: 'user',
+      content: record.type === 'fill-blank'
+        ? `빈칸 답안:\n${userAttempt}`
+        : `답안:\n${userAttempt}`,
+    });
+
+    conversation.push({
+      role: 'assistant',
+      content: `채점 결과: ${record.correct ? '정답' : '오답'}`,
+    });
+  }
+
+  return conversation;
+}
+
 /**
  * OpenAI provider implementation with function calling
  */
@@ -231,11 +372,16 @@ export class OpenAIProvider implements AIProvider {
    */
   async generateProblem(progress: StudentProgress, problemIndex: number): Promise<SemiResponse> {
     const systemPrompt = buildProblemPrompt(progress, problemIndex);
+    const historyConversation = buildHistoryConversation(progress.history);
 
     console.log('[AI] Generating problem for index:', problemIndex);
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: '다음 문제를 출제해주세요.' },
+      ...historyConversation,
+      {
+        role: 'user',
+        content: '다음 문제를 출제해주세요.',
+      },
     ];
 
     const response = await this.client.chat.completions.create({
@@ -261,38 +407,34 @@ export class OpenAIProvider implements AIProvider {
         if (funcName === 'generate_fill_blank_problem') {
           result.problem = {
             type: 'fill-blank',
-            difficulty: args.difficulty,
             question: args.question,
-            code: args.code,
+            code: normalizeEscapedCode(args.code),
             testCases: args.testCases,
-            solutionCode: args.solutionCode,
+            solutionCode: normalizeEscapedCode(args.solutionCode),
             attachments: { editable: true, runnable: true },
           };
         } else if (funcName === 'generate_predict_output_problem') {
           result.problem = {
             type: 'predict-output',
-            difficulty: args.difficulty,
             question: args.question,
-            code: args.code,
-            attachments: { editable: false, runnable: true },
+            code: normalizeEscapedCode(args.code),
+            attachments: { editable: false, runnable: false },
           };
         } else if (funcName === 'generate_find_bug_problem') {
           result.problem = {
             type: 'find-bug',
-            difficulty: args.difficulty,
             question: args.question,
-            code: args.code,
+            code: normalizeEscapedCode(args.code),
             answer: args.answer,
-            attachments: { choices: args.choices },
+            attachments: { choices: args.choices, editable: false, runnable: false },
           };
         } else if (funcName === 'generate_multiple_choice_problem') {
           result.problem = {
             type: 'multiple-choice',
-            difficulty: args.difficulty,
             question: args.question,
-            code: args.code,
+            code: normalizeEscapedCode(args.code),
             answer: args.answer,
-            attachments: { choices: args.choices },
+            attachments: { choices: args.choices, editable: false, runnable: false },
           };
         }
       }
@@ -310,7 +452,6 @@ export class OpenAIProvider implements AIProvider {
     console.dir({
       hasProblem: !!result.problem,
       problemType: result.problem?.type,
-      problemDifficulty: result.problem?.difficulty,
       hasMessage: !!result.message,
     }, { colors: true, depth: null });
 

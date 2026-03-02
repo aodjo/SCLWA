@@ -51,8 +51,8 @@ export default function ProblemPanel({
   const { attachments } = problem;
   const choices = attachments?.choices;
   const testCases = problem.testCases ?? [];
-  const isEditable = attachments?.editable;
-  const showAnswerInput = choices || problem.type === 'predict-output' || !isEditable;
+  const showPredictInput = problem.type === 'predict-output' && !choices;
+  const showFooter = waitingForNext || !!onSubmit || !!onPass || !!onNext;
   const showTestCases = testCases.length > 0;
 
   return (
@@ -114,15 +114,15 @@ export default function ProblemPanel({
         )}
       </div>
 
-      {(showAnswerInput || waitingForNext) && (
+      {showFooter && (
         <div className="border-t border-zinc-200">
-          {showAnswerInput && !waitingForNext && (
+          {showPredictInput && !waitingForNext && (
             <div className="px-4 py-2 bg-zinc-100 border-b border-zinc-200">
               <span className="text-sm font-medium text-zinc-700">{t('problem.answerLabel')}</span>
             </div>
           )}
 
-          {problem.type === 'predict-output' && !choices && !waitingForNext && (
+          {showPredictInput && !waitingForNext && (
             <div className="p-4">
               <input
                 type="text"
@@ -134,7 +134,7 @@ export default function ProblemPanel({
             </div>
           )}
 
-          <div className={`p-4 ${!waitingForNext && (showAnswerInput || problem.type === 'predict-output') ? 'pt-0' : ''} flex gap-2`}>
+          <div className={`p-4 ${!waitingForNext && showPredictInput ? 'pt-0' : ''} flex gap-2`}>
             {waitingForNext ? (
               <button
                 onClick={onNext}

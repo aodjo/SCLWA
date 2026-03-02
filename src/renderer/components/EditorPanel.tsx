@@ -19,6 +19,7 @@ interface EditorPanelProps {
   waitingForNext?: boolean;
   readonly?: boolean;
   runnable?: boolean;
+  alertMessage?: string | null;
 }
 
 /**
@@ -30,7 +31,18 @@ interface EditorPanelProps {
  * @param submitting - Whether submission is in progress
  * @returns Editor panel component
  */
-export default function EditorPanel({ code, onChange, onSubmit, onPass, onNext, submitting, waitingForNext, readonly, runnable = true }: EditorPanelProps) {
+export default function EditorPanel({
+  code,
+  onChange,
+  onSubmit,
+  onPass,
+  onNext,
+  submitting,
+  waitingForNext,
+  readonly,
+  runnable = true,
+  alertMessage,
+}: EditorPanelProps) {
   const { t } = useTranslation();
   const [running, setRunning] = useState(false);
   const [standard, setStandard] = useState<typeof C_STANDARDS[number]>('C17');
@@ -289,7 +301,12 @@ export default function EditorPanel({ code, onChange, onSubmit, onPass, onNext, 
 
       <Group orientation="vertical" className="flex-1">
         <Panel defaultSize="70%" minSize="30%">
-          <div className="h-full">
+          <div className="h-full relative">
+            {alertMessage && (
+              <div className="absolute right-3 top-3 z-20 rounded-md border border-red-400 bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg">
+                {alertMessage}
+              </div>
+            )}
             <Editor
               height="100%"
               defaultLanguage="c"

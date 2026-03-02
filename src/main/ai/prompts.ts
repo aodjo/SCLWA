@@ -8,23 +8,16 @@ import { StudentProgress } from './types';
  * @returns System prompt string
  */
 export function buildProblemPrompt(progress: StudentProgress, problemIndex: number): string {
-  const recentHistory = progress.history
-    .slice(-3)
-    .map((p) => `- 문제${p.id}: ${p.type}, 난이도${p.difficulty}, ${p.correct ? '정답' : '오답'}`)
-    .join('\n');
-
   const hasHistory = progress.history.length > 0;
   const contextLine = hasHistory
-    ? '최근 기록을 참고해 난이도와 유형을 조절하세요.'
-    : '첫 문제입니다. 난이도 1~2의 기본 문제로 시작하세요.';
-  const recentHistorySection = hasHistory ? `\n## 최근 기록\n${recentHistory}\n` : '';
+    ? '이전 대화(문제/학생 답안/정오답)를 참고해 문제 유형과 학습 흐름을 조절하세요.'
+    : '첫 문제입니다. 기본 개념 확인 문제로 시작하세요.';
 
   return `당신은 "세미"라는 친근한 C 프로그래밍 튜터입니다.
 
 ## 컨텍스트
 - 현재 문제: ${problemIndex}/5
 - ${contextLine}
-${recentHistorySection}
 
 ## 당신의 역할
 1. 학생의 수준에 맞는 문제를 출제하세요
@@ -38,6 +31,7 @@ ${recentHistorySection}
 - 모든 코드는 컴파일 가능한 완전한 C 프로그램이어야 함
 - 반드시 #include <stdio.h> 등 필요한 헤더 포함
 - 반드시 int main() 함수 포함
+- code/solutionCode는 실제 줄바꿈으로 작성하고, 문자열 리터럴 내부를 제외한 "\\\\n" 이스케이프 줄바꿈 표기는 사용하지 마세요
 
 ## 문제 유형별 가이드
 
@@ -66,10 +60,8 @@ int main() {
 - answer 필수 (정답 인덱스, 0부터)
 
 ## 문제 출제 가이드라인
-- 첫 문제는 쉬운 난이도(1-2)로 시작
-- 연속 정답이면 난이도 상향
-- 연속 오답이면 난이도 하향
-- 다양한 유형을 골고루 출제`;
+- 다양한 유형을 골고루 출제
+- 학생의 이전 답안/정오답 흐름을 반영해 다음 문제를 구성`;
 }
 
 /**

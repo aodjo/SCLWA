@@ -13,7 +13,6 @@ export interface ProblemAttachments {
 
 export interface Problem {
   type: ProblemType;
-  difficulty: number;
   question: string;
   code?: string;
   attachments?: ProblemAttachments;
@@ -30,7 +29,6 @@ export interface Message {
 export interface ProblemRecord {
   id: number;
   type: ProblemType;
-  difficulty: number;
   question: string;
   code?: string;
   correct: boolean;

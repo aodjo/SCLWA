@@ -93,7 +93,6 @@ export async function initDatabase(): Promise<void> {
       progress_id INTEGER,
       problem_index INTEGER,
       type TEXT,
-      difficulty INTEGER,
       question TEXT,
       code TEXT,
       correct INTEGER,
@@ -105,7 +104,64 @@ export async function initDatabase(): Promise<void> {
     )
   `);
 
+  migrateProblemHistorySchema();
   saveDatabase();
+}
+
+function hasColumn(tableName: string, columnName: string): boolean {
+  if (!db) throw new Error('Database not initialized');
+  const stmt = db.prepare(`PRAGMA table_info(${tableName})`);
+
+  let exists = false;
+  while (stmt.step()) {
+    const row = stmt.getAsObject() as { name: string };
+    if (row.name === columnName) {
+      exists = true;
+      break;
+    }
+  }
+
+  stmt.free();
+  return exists;
+}
+
+function migrateProblemHistorySchema(): void {
+  if (!db) throw new Error('Database not initialized');
+  if (!hasColumn('problem_history', 'difficulty')) return;
+
+  db.run('BEGIN TRANSACTION');
+  try {
+    db.run(`
+      CREATE TABLE problem_history_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        progress_id INTEGER,
+        problem_index INTEGER,
+        type TEXT,
+        question TEXT,
+        code TEXT,
+        correct INTEGER,
+        user_answer TEXT,
+        hints_used INTEGER DEFAULT 0,
+        chat_log TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (progress_id) REFERENCES student_progress(id)
+      )
+    `);
+
+    db.run(`
+      INSERT INTO problem_history_new
+      (id, progress_id, problem_index, type, question, code, correct, user_answer, hints_used, chat_log, created_at)
+      SELECT id, progress_id, problem_index, type, question, code, correct, user_answer, hints_used, chat_log, created_at
+      FROM problem_history
+    `);
+
+    db.run('DROP TABLE problem_history');
+    db.run('ALTER TABLE problem_history_new RENAME TO problem_history');
+    db.run('COMMIT');
+  } catch (error) {
+    db.run('ROLLBACK');
+    throw error;
+  }
 }
 
 /**
@@ -169,7 +225,6 @@ export function saveAIConfig(provider: string, apiKey: string, enabled: boolean)
 interface ProblemRecord {
   id: number;
   type: string;
-  difficulty: number;
   question: string;
   code?: string;
   correct: boolean;
@@ -234,7 +289,6 @@ export function getStudentProgress(): StudentProgress {
     const row = historyStmt.getAsObject() as {
       id: number;
       type: string;
-      difficulty: number;
       question: string;
       code: string | null;
       correct: number;
@@ -245,7 +299,6 @@ export function getStudentProgress(): StudentProgress {
     progress.history.push({
       id: row.id,
       type: row.type,
-      difficulty: row.difficulty,
       question: row.question,
       code: row.code || undefined,
       correct: row.correct === 1,
@@ -288,13 +341,12 @@ export function saveProblemRecord(progressId: number, record: ProblemRecord): vo
 
   db.run(
     `INSERT INTO problem_history
-     (progress_id, problem_index, type, difficulty, question, code, correct, user_answer, hints_used, chat_log)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (progress_id, problem_index, type, question, code, correct, user_answer, hints_used, chat_log)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       progressId,
       record.id,
       record.type,
-      record.difficulty,
       record.question,
       record.code || null,
       record.correct ? 1 : 0,
