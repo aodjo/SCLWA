@@ -246,7 +246,7 @@ export default function LevelTest() {
 
   const handleSelectChoice = (index: number) => {
     if (!currentProblem) return;
-    if (isChoiceProblem && selectedChoice !== null) return;
+    if (waitingForNext || submitting) return;
     setSelectedChoice(index);
   };
 
@@ -716,8 +716,33 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
     setToastMessage(null);
   };
 
-  const handleResultAction = () => {
-    // Placeholder until main learning workflow replaces level test screen.
+  const handleResultAction = async () => {
+    setLoading(true);
+    setError(null);
+    setFinished(false);
+    setWaitingForNext(false);
+    setCurrentProblem(null);
+    setPredictAnswer('');
+    setSelectedChoice(null);
+    setMessages([]);
+    setResults([]);
+
+    try {
+      const initialized = await initializeAI();
+      if (!initialized) {
+        setStarted(false);
+        return;
+      }
+
+      const newProgress = await window.electronAPI.resetStudentProgress();
+      setProgress(newProgress);
+      await generateProblem(newProgress);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start study');
+      setStarted(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (restoringProgress) {
@@ -786,7 +811,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
               problem={currentProblem}
               selectedChoice={selectedChoice}
               onSelectChoice={handleSelectChoice}
-              choicesLocked={isChoiceProblem && selectedChoice !== null}
+              choicesLocked={isChoiceProblem && (waitingForNext || submitting)}
               predictAnswer={predictAnswer}
               onPredictAnswerChange={setPredictAnswer}
               waitingForNext={waitingForNext}
