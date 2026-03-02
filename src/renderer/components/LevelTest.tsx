@@ -16,6 +16,7 @@ import type {
   StudentProgress,
   ProblemRecord,
   ChatMessage,
+  ToolCallRecord,
 } from '../types/electron.d.ts';
 
 export interface Problem extends BaseProblem {
@@ -70,6 +71,7 @@ export default function LevelTest() {
   const submitDisabled = !!(currentProblem?.attachments?.choices?.length) && selectedChoice === null;
   const currentIndex = progress?.history.length ?? 0;
   const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
+  const chatInputLocked = true;
   const canUseChatStream =
     typeof window.electronAPI.aiChatStream === 'function' &&
     typeof window.electronAPI.onAIChatStreamDelta === 'function' &&
@@ -250,6 +252,7 @@ export default function LevelTest() {
       userAnswer: '',
       hintsUsed,
       chatLog: messages,
+      toolLog: [],
     };
 
     await window.electronAPI.saveProblemRecord(progress.id, record);
@@ -292,6 +295,7 @@ export default function LevelTest() {
       });
 
       let gradeResult;
+      const toolLog: ToolCallRecord[] = [];
 
       // Grade based on problem type
       switch (type) {
@@ -302,10 +306,32 @@ export default function LevelTest() {
 
         case 'predict-output':
           gradeResult = await gradePredictOutput(currentProblem.code || '', predictAnswer);
+          toolLog.push({
+            tool: 'dockerExecute',
+            input: {
+              code: currentProblem.code || '',
+              input: '',
+            },
+            output: gradeResult.details?.executionResult || {
+              expected: gradeResult.details?.expected || '',
+              actual: gradeResult.details?.actual || '',
+              correct: gradeResult.correct,
+            },
+          });
           break;
 
         case 'fill-blank':
           gradeResult = await gradeWithTestCases(code, currentProblem.testCases || []);
+          toolLog.push({
+            tool: 'dockerTest',
+            input: {
+              code,
+              testCases: currentProblem.testCases || [],
+            },
+            output: gradeResult.details?.testResults || {
+              correct: gradeResult.correct,
+            },
+          });
           break;
 
         default:
@@ -321,16 +347,23 @@ export default function LevelTest() {
       const hasTestCases = (currentProblem.testCases?.length ?? 0) > 0;
       const needsAbuseReview = type === 'fill-blank' && hasTestCases && dockerPassed;
       if (needsAbuseReview) {
+        const reviewInput = {
+          problemType: currentProblem.type,
+          question: currentProblem.question,
+          problemCode: currentProblem.code,
+          userCode: code,
+          testCases: currentProblem.testCases || [],
+        };
+
         try {
-          const review = await window.electronAPI.aiReviewSubmission({
-            problemType: currentProblem.type,
-            question: currentProblem.question,
-            problemCode: currentProblem.code,
-            userCode: code,
-            testCases: currentProblem.testCases || [],
-          });
+          const review = await window.electronAPI.aiReviewSubmission(reviewInput);
 
           reviewFeedback = review.feedback;
+          toolLog.push({
+            tool: 'aiReviewSubmission',
+            input: reviewInput,
+            output: review,
+          });
           if (!review.passed) {
             finalCorrect = false;
           }
@@ -371,6 +404,7 @@ export default function LevelTest() {
         userAnswer,
         hintsUsed,
         chatLog: messages,
+        toolLog,
       };
 
       await window.electronAPI.saveProblemRecord(progress.id, record);
@@ -420,7 +454,7 @@ export default function LevelTest() {
    * @param message - User message
    */
   const handleSendMessage = async (message: string) => {
-    if (!currentProblem || chatStreaming) return;
+    if (!currentProblem || chatStreaming || chatInputLocked) return;
 
     const newMessages: ChatMessage[] = [...messages, { role: 'user', content: message }];
     setMessages([...newMessages, { role: 'assistant', content: '' }]);
@@ -588,7 +622,12 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
 
         <Panel defaultSize={showEditor ? '34%' : '50%'} minSize="20%">
           <div className="h-full flex flex-col">
-            <ChatPanel messages={messages} onSendMessage={handleSendMessage} sending={chatStreaming} />
+            <ChatPanel
+              messages={messages}
+              onSendMessage={handleSendMessage}
+              sending={chatStreaming}
+              inputLocked={chatInputLocked}
+            />
           </div>
         </Panel>
       </Group>

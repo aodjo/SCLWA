@@ -35,6 +35,13 @@ export interface ProblemRecord {
   userAnswer: string;
   hintsUsed: number;
   chatLog: Message[];
+  toolLog?: ToolCallRecord[];
+}
+
+export interface ToolCallRecord {
+  tool: string;
+  input: unknown;
+  output: unknown;
 }
 
 export interface StudentProgress {

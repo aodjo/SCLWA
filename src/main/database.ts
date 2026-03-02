@@ -99,12 +99,14 @@ export async function initDatabase(): Promise<void> {
       user_answer TEXT,
       hints_used INTEGER DEFAULT 0,
       chat_log TEXT,
+      tool_log TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (progress_id) REFERENCES student_progress(id)
     )
   `);
 
   migrateProblemHistorySchema();
+  ensureProblemHistoryToolLogColumn();
   saveDatabase();
 }
 
@@ -128,6 +130,7 @@ function hasColumn(tableName: string, columnName: string): boolean {
 function migrateProblemHistorySchema(): void {
   if (!db) throw new Error('Database not initialized');
   if (!hasColumn('problem_history', 'difficulty')) return;
+  const sourceHasToolLog = hasColumn('problem_history', 'tool_log');
 
   db.run('BEGIN TRANSACTION');
   try {
@@ -143,6 +146,7 @@ function migrateProblemHistorySchema(): void {
         user_answer TEXT,
         hints_used INTEGER DEFAULT 0,
         chat_log TEXT,
+        tool_log TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (progress_id) REFERENCES student_progress(id)
       )
@@ -150,8 +154,8 @@ function migrateProblemHistorySchema(): void {
 
     db.run(`
       INSERT INTO problem_history_new
-      (id, progress_id, problem_index, type, question, code, correct, user_answer, hints_used, chat_log, created_at)
-      SELECT id, progress_id, problem_index, type, question, code, correct, user_answer, hints_used, chat_log, created_at
+      (id, progress_id, problem_index, type, question, code, correct, user_answer, hints_used, chat_log, tool_log, created_at)
+      SELECT id, progress_id, problem_index, type, question, code, correct, user_answer, hints_used, chat_log, ${sourceHasToolLog ? 'tool_log' : 'NULL'}, created_at
       FROM problem_history
     `);
 
@@ -162,6 +166,12 @@ function migrateProblemHistorySchema(): void {
     db.run('ROLLBACK');
     throw error;
   }
+}
+
+function ensureProblemHistoryToolLogColumn(): void {
+  if (!db) throw new Error('Database not initialized');
+  if (hasColumn('problem_history', 'tool_log')) return;
+  db.run('ALTER TABLE problem_history ADD COLUMN tool_log TEXT');
 }
 
 /**
@@ -231,6 +241,7 @@ interface ProblemRecord {
   userAnswer: string;
   hintsUsed: number;
   chatLog: { role: string; content: string }[];
+  toolLog?: { tool: string; input: unknown; output: unknown }[];
 }
 
 interface StudentProgress {
@@ -295,7 +306,21 @@ export function getStudentProgress(): StudentProgress {
       user_answer: string;
       hints_used: number;
       chat_log: string | null;
+      tool_log: string | null;
     };
+
+    let parsedToolLog: { tool: string; input: unknown; output: unknown }[] = [];
+    if (row.tool_log) {
+      try {
+        const parsed = JSON.parse(row.tool_log);
+        if (Array.isArray(parsed)) {
+          parsedToolLog = parsed;
+        }
+      } catch {
+        parsedToolLog = [];
+      }
+    }
+
     progress.history.push({
       id: row.id,
       type: row.type,
@@ -305,6 +330,7 @@ export function getStudentProgress(): StudentProgress {
       userAnswer: row.user_answer,
       hintsUsed: row.hints_used,
       chatLog: row.chat_log ? JSON.parse(row.chat_log) : [],
+      toolLog: parsedToolLog,
     });
   }
   historyStmt.free();
@@ -341,8 +367,8 @@ export function saveProblemRecord(progressId: number, record: ProblemRecord): vo
 
   db.run(
     `INSERT INTO problem_history
-     (progress_id, problem_index, type, question, code, correct, user_answer, hints_used, chat_log)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (progress_id, problem_index, type, question, code, correct, user_answer, hints_used, chat_log, tool_log)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       progressId,
       record.id,
@@ -353,6 +379,7 @@ export function saveProblemRecord(progressId: number, record: ProblemRecord): vo
       record.userAnswer,
       record.hintsUsed,
       JSON.stringify(record.chatLog),
+      JSON.stringify(record.toolLog || []),
     ]
   );
 

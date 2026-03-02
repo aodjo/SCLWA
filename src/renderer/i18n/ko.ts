@@ -20,6 +20,7 @@ export default {
     title: 'AI 채팅',
     aiName: '세미',
     placeholder: '메시지를 입력해주세요...',
+    lockedPlaceholder: '레벨 테스트 중에는 채팅 입력이 비활성화됩니다',
     emptyMessage: '세미에게 질문해보세요!',
   },
   editor: {
@@ -68,7 +69,7 @@ export default {
     title: '테스트 완료!',
     subtitle: '수고했어요. 결과를 확인해보세요.',
     details: '문제별 결과',
-    restart: '다시 테스트하기',
+    restart: '이제 C 공부를 시작해봐요!',
     levels: {
       starter: '입문',
       beginner: '초급',

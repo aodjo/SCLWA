@@ -1,4 +1,5 @@
 import type { TestResult } from '../types/electron.d.ts';
+import type { ExecutionResult } from '../types/electron.d.ts';
 
 const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor[\w-]*\):\([^)]+\)\]\]/g;
 
@@ -19,6 +20,7 @@ export interface GradeResult {
     expected?: string;
     actual?: string;
     testResults?: TestResult;
+    executionResult?: ExecutionResult;
   };
 }
 
@@ -72,6 +74,7 @@ export async function gradePredictOutput(
     details: {
       expected,
       actual,
+      executionResult: execResult,
     },
   };
 }

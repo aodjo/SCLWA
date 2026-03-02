@@ -346,6 +346,20 @@ function buildHistoryConversation(history: ProblemRecord[]): OpenAI.Chat.Complet
       role: 'assistant',
       content: `Result: ${record.correct ? 'correct' : (userAttempt === NO_INPUT ? 'incorrect (pass)' : 'incorrect (attempted)')}`,
     });
+
+    const toolLog = record.toolLog ?? [];
+    if (toolLog.length > 0) {
+      const toolSummaries = toolLog.map((entry, index) => {
+        const input = typeof entry.input === 'string' ? entry.input : JSON.stringify(entry.input, null, 2);
+        const output = typeof entry.output === 'string' ? entry.output : JSON.stringify(entry.output, null, 2);
+        return `[${index + 1}] ${entry.tool}\nInput:\n${input}\nOutput:\n${output}`;
+      });
+
+      conversation.push({
+        role: 'assistant',
+        content: `Tool calls and results:\n${toolSummaries.join('\n\n')}`,
+      });
+    }
   }
 
   return conversation;
@@ -518,7 +532,7 @@ export class OpenAIProvider implements AIProvider {
    * @returns Pass/reject decision with user-facing feedback
    */
   async reviewSubmission(input: SubmissionReviewInput): Promise<SubmissionReviewResult> {
-    const systemPrompt = `당신은 "세미"가 아닌 C 코드 채점 무결성 심사관입니다.
+    const systemPrompt = `당신은 C 코드 채점 무결성 심사관입니다.
 당신의 역할은 제출 코드가 문제 의도에 맞는 일반 해법인지, 테스트케이스만 맞추는 어뷰징인지 판정하는 것입니다.
 
 판정 기준:

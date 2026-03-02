@@ -11,6 +11,7 @@ interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
   sending?: boolean;
+  inputLocked?: boolean;
 }
 
 /**
@@ -20,7 +21,12 @@ interface ChatPanelProps {
  * @param onSendMessage - Callback when user sends a message
  * @returns Chat panel component
  */
-export default function ChatPanel({ messages, onSendMessage, sending = false }: ChatPanelProps) {
+export default function ChatPanel({
+  messages,
+  onSendMessage,
+  sending = false,
+  inputLocked = false,
+}: ChatPanelProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
 
@@ -31,7 +37,7 @@ export default function ChatPanel({ messages, onSendMessage, sending = false }: 
    */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || sending) return;
+    if (!input.trim() || sending || inputLocked) return;
     onSendMessage(input);
     setInput('');
   };
@@ -73,14 +79,14 @@ export default function ChatPanel({ messages, onSendMessage, sending = false }: 
           <input
             type="text"
             value={input}
-            disabled={sending}
+            disabled={sending || inputLocked}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={t('chat.placeholder')}
+            placeholder={inputLocked ? t('chat.lockedPlaceholder') : t('chat.placeholder')}
             className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-50 outline-none focus:border-zinc-700 placeholder:text-zinc-600"
           />
           <button
             type="submit"
-            disabled={sending || !input.trim()}
+            disabled={sending || inputLocked || !input.trim()}
             className="bg-zinc-800 rounded-md px-3 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-50 transition-colors cursor-pointer"
           >
             <BiSend />
