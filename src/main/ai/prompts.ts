@@ -29,6 +29,9 @@ export function buildProblemPrompt(): string {
 - 허용: [[(guide-anchor*):({텍스트})]], [[(guide-anchor1):(클릭하여 코드를 완성하세요)]], [[(guide-anchor2):(클릭하여 코드를 완성하세요)]]
 - 금지: [[(ans1):(...)]] 같은 임의 ID
 - anchor ID는 반드시 guide-anchor 또는 guide-anchorN(N은 숫자)만 사용
+- question에는 anchor 문법(\`[[(\`, \`guide-anchor\`, \`guide-anchor1\` 등)이나 ID 규칙을 절대 쓰지 마세요
+- anchor ID는 내부 처리용이며 사용자에게 노출되지 않습니다
+- 사용자에게 보이는 것은 괄호 안 텍스트(예: "클릭하여 코드를 완성하세요")뿐이며, question은 자연어 문제 설명만 작성하세요
 - testCases 필수 (채점에 사용)
 - 문제 설명(question)은 정답 기준이 명확해야 함
 - "초기화 부분을 완성하세요" 같은 모호한 문구 금지

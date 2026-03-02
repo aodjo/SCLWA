@@ -24,7 +24,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         properties: {
           question: {
             type: 'string',
-            description: '문제 설명',
+            description: '문제 설명(자연어만). [[(guide-anchor...)]], ID 규칙, placeholder 문법 설명을 question에 쓰지 말 것',
           },
           code: {
             type: 'string',

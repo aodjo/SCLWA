@@ -58,12 +58,13 @@ export default function LevelTest() {
   const activeChatRequestIdRef = useRef<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showEditor = !!currentProblem?.code;
+  const showEditor = !!currentProblem;
+  const hasCode = !!currentProblem?.code;
   const isEditable = currentProblem
     ? (currentProblem.attachments?.editable ?? (currentProblem.type === 'fill-blank'))
     : false;
   const isRunnable = currentProblem
-    ? (currentProblem.attachments?.runnable ?? (currentProblem.type === 'fill-blank'))
+    ? hasCode && (currentProblem.attachments?.runnable ?? (currentProblem.type === 'fill-blank'))
     : false;
   const submitDisabled = !!(currentProblem?.attachments?.choices?.length) && selectedChoice === null;
   const currentIndex = progress?.history.length ?? 0;

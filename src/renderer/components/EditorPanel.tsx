@@ -6,7 +6,6 @@ import type { editor } from 'monaco-editor';
 import tomorrowNight from '../themes/tomorrow-night.json';
 import Terminal, { TerminalHandle } from './Terminal';
 
-const C_STANDARDS = ['C17', 'C11', 'C99'] as const;
 const GUIDE_ANCHOR_REGEX = /\[\[\(guide-anchor[\w-]*\):\(([^)]+)\)\]\]/g;
 
 interface EditorPanelProps {
@@ -47,9 +46,6 @@ export default function EditorPanel({
 }: EditorPanelProps) {
   const { t } = useTranslation();
   const [running, setRunning] = useState(false);
-  const [standard, setStandard] = useState<typeof C_STANDARDS[number]>('C17');
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
@@ -149,16 +145,6 @@ export default function EditorPanel({
   }, [applyGuideAnchorDecorations]);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
     const cleanupStdout = window.electronAPI.onDockerStdout((data) => {
       terminalRef.current?.write(data);
     });
@@ -240,35 +226,7 @@ export default function EditorPanel({
       <div className="flex items-center justify-between px-2 py-1 border-b border-zinc-700 bg-zinc-800">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-zinc-300 px-2 py-1 border-r border-zinc-700">C</span>
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-1 bg-zinc-700 text-zinc-300 text-sm px-2 py-1 rounded cursor-pointer hover:bg-zinc-600 transition-colors"
-            >
-              {standard}
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {dropdownOpen && (
-              <div className="absolute top-full left-0 mt-2 bg-zinc-700 rounded-lg shadow-lg z-10 min-w-full p-1">
-                {C_STANDARDS.map((std) => (
-                  <button
-                    key={std}
-                    onClick={() => {
-                      setStandard(std);
-                      setDropdownOpen(false);
-                    }}
-                    className={`block w-full text-left px-3 py-1.5 text-sm cursor-pointer transition-colors rounded ${
-                      standard === std ? 'bg-zinc-600 text-white' : 'text-zinc-300 hover:bg-zinc-600'
-                    }`}
-                  >
-                    {std}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <span className="bg-zinc-700 text-zinc-300 text-sm px-2 py-1 rounded">C17</span>
         </div>
         <div className="flex items-center gap-1">
           {!readonly && (

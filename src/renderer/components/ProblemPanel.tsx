@@ -57,7 +57,7 @@ export default function ProblemPanel({
 
       <div className="flex-1 p-4 overflow-auto">
         <div className="bg-zinc-100 border-l-4 border-zinc-400 p-4 mb-4">
-          <p className="text-zinc-800 font-medium">{problem.question}</p>
+          <p className="text-zinc-800 font-medium whitespace-pre-line">{problem.question}</p>
         </div>
 
         {showTestCases && (
