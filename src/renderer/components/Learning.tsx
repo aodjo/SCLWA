@@ -557,6 +557,9 @@ export default function Learning() {
       const needsAbuseReview = type === 'fill-blank' && hasTestCases && dockerPassed;
 
       if (needsAbuseReview) {
+        // Show immediate feedback that tests passed
+        setMessages((prev) => [...prev, { role: 'assistant', content: '✅ 테스트 통과! 코드를 검토하고 있어요...' }]);
+
         const reviewRequest: ChatMessage = {
           role: 'user',
           content: `[시스템: 코드 검토 요청]
@@ -629,15 +632,18 @@ ${code}
             setProgress(updatedProgress);
             await window.electronAPI.saveStudentProgress(updatedProgress);
 
-            // Show feedback message
-            if (reviewFeedback) {
-              setMessages((prev) => [...prev, { role: 'assistant', content: reviewFeedback! }]);
-              void persistConversationMessage('assistant', reviewFeedback, currentProblem.id);
-            }
-            if (result.message) {
-              setMessages((prev) => [...prev, { role: 'assistant', content: result.message! }]);
-              void persistConversationMessage('assistant', result.message);
-            }
+            // Replace "검토 중..." with actual feedback
+            const feedbackContent = [reviewFeedback, result.message].filter(Boolean).join('\n\n') || '잘했어요!';
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.includes('검토')) {
+                next[lastIndex] = { role: 'assistant', content: feedbackContent };
+                return next;
+              }
+              return [...next, { role: 'assistant', content: feedbackContent }];
+            });
+            void persistConversationMessage('assistant', feedbackContent, currentProblem.id);
 
             // Process next problem generation
             await processLearningToolCalls(generateToolCalls);
@@ -656,10 +662,20 @@ ${code}
           showToast('오답이에요. 선택이 잠겼습니다.');
         } else {
           const feedback = reviewFeedback || '오답이에요.';
-          setMessages((prev) => [...prev, { role: 'assistant', content: feedback }]);
+          // Replace "검토 중..." with rejection feedback
+          setMessages((prev) => {
+            const next = [...prev];
+            const lastIndex = next.length - 1;
+            if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.includes('검토')) {
+              next[lastIndex] = { role: 'assistant', content: feedback };
+              return next;
+            }
+            return [...next, { role: 'assistant', content: feedback }];
+          });
           void persistConversationMessage('assistant', feedback, currentProblem.id);
           showToast('오답이에요.');
           setWaitingForNext(false);
+          setSubmitting(false);
           return;
         }
       }
@@ -697,7 +713,16 @@ ${code}
             ? '오답이에요. 이번 선택은 최종 선택으로 잠겼습니다.'
             : `😢 아쉬워요. ${currentProblem.solutionCode ? '정답 코드를 확인해보세요.' : '다음에 다시 도전해봐요!'}`;
 
-      setMessages((prev) => [...prev, { role: 'assistant', content: feedbackMessage }]);
+      // Replace "검토 중..." if exists, otherwise add new message
+      setMessages((prev) => {
+        const next = [...prev];
+        const lastIndex = next.length - 1;
+        if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.includes('검토')) {
+          next[lastIndex] = { role: 'assistant', content: feedbackMessage };
+          return next;
+        }
+        return [...next, { role: 'assistant', content: feedbackMessage }];
+      });
       void persistConversationMessage('assistant', feedbackMessage, currentProblem.id);
       setWaitingForNext(true);
     } catch (err) {
