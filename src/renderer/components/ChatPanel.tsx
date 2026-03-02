@@ -30,6 +30,12 @@ export default function ChatPanel({
   const { t } = useTranslation();
   const [input, setInput] = useState('');
 
+  const toDisplayContent = (message: Message): string => {
+    const normalized = message.content.replace(/\r\n/g, '\n');
+    if (message.role !== 'assistant') return normalized;
+    return normalized.replace(/\\n/g, '\n');
+  };
+
   /**
    * Handles form submission for sending messages
    *
@@ -43,8 +49,8 @@ export default function ChatPanel({
   };
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="flex-1 p-4 overflow-auto">
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex-1 min-h-0 p-4 overflow-y-auto">
         {messages.length === 0 ? (
           <p className="text-zinc-600 text-sm">
             {t('chat.emptyMessage')}
@@ -64,9 +70,9 @@ export default function ChatPanel({
                     msg.role === 'user'
                       ? 'bg-zinc-700 text-zinc-50'
                       : 'bg-zinc-900 border border-zinc-800 text-zinc-300'
-                  }`}
+                  } whitespace-pre-wrap break-words`}
                 >
-                  {msg.content}
+                  {toDisplayContent(msg)}
                 </div>
               </div>
             ))}

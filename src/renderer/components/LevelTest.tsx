@@ -16,6 +16,7 @@ import type {
   StudentProgress,
   ProblemRecord,
   ChatMessage,
+  ConversationMessageRecord,
   ToolCallRecord,
 } from '../types/electron.d.ts';
 
@@ -29,6 +30,11 @@ interface ProblemResult {
   problem: Problem;
   correct: boolean;
   userAnswer: string;
+}
+
+interface StreamRequestContext {
+  problemIndex?: number;
+  meta?: unknown;
 }
 
 const TOTAL_PROBLEMS = 5;
@@ -96,10 +102,12 @@ export default function LevelTest({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [chatStreaming, setChatStreaming] = useState(false);
   const activeChatRequestIdRef = useRef<string | null>(null);
+  const streamRequestContextsRef = useRef<Record<string, StreamRequestContext>>({});
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressRef = useRef<StudentProgress | null>(null);
   const currentProblemRef = useRef<Problem | null>(null);
   const restoreOnceRef = useRef(false);
+  const learningAnalysisOnceRef = useRef(false);
 
   const isPlacementMode = mode === 'level-test';
   const showProblemPanel = isPlacementMode || !!currentProblem;
@@ -125,6 +133,7 @@ export default function LevelTest({
     sender: ChatMessage['role'],
     content: string,
     overrideProblemIndex?: number,
+    meta?: unknown,
   ) => {
     if (!content.trim()) return;
     const activeProgress = progressRef.current;
@@ -135,12 +144,15 @@ export default function LevelTest({
         sender,
         message: content,
         problemIndex: overrideProblemIndex ?? currentProblemRef.current?.id,
+        meta,
       });
     } catch (saveError) {
       console.error('[LevelTest] Failed to save conversation message:', saveError);
     }
   }, []);
-  const loadConversationMessages = useCallback(async (progressId: number) => {
+  const loadConversationMessages = useCallback(async (
+    progressId: number,
+  ): Promise<ConversationMessageRecord[]> => {
     try {
       const rows = await window.electronAPI.getConversationMessages(progressId);
       const restored: ChatMessage[] = rows
@@ -150,11 +162,126 @@ export default function LevelTest({
           content: row.message,
         }));
       setMessages(restored);
+      return rows;
     } catch (loadError) {
       console.error('[LevelTest] Failed to load conversation messages:', loadError);
       setMessages([]);
+      return [];
     }
   }, []);
+
+  const ensureLearningInitialAnalysis = useCallback(async (
+    currentProgress: StudentProgress,
+    conversationRows: ConversationMessageRecord[],
+  ) => {
+    if (isPlacementMode) return;
+    if (learningAnalysisOnceRef.current) return;
+
+    const hasExistingAnalysis = conversationRows.some((row) => {
+      if (row.sender !== 'assistant') return false;
+      if (!row.meta || typeof row.meta !== 'object') return false;
+      const meta = row.meta as { kind?: string };
+      return meta.kind === 'learning-initial-analysis';
+    });
+
+    if (hasExistingAnalysis) {
+      learningAnalysisOnceRef.current = true;
+      return;
+    }
+
+    if ((currentProgress.history?.length ?? 0) === 0) return;
+    learningAnalysisOnceRef.current = true;
+
+    const analysisInput = {
+      totalProblems: currentProgress.totalProblems,
+      totalCorrect: currentProgress.totalCorrect,
+      history: currentProgress.history.map((record, index) => ({
+        index: index + 1,
+        type: record.type,
+        correct: record.correct,
+        passed: !(record.userAnswer ?? '').trim(),
+        userAnswer: record.userAnswer,
+        hintsUsed: record.hintsUsed,
+      })),
+    };
+
+    const analysisMessages: ChatMessage[] = [
+      {
+        role: 'system',
+        content: `당신은 "세미"라는 친근한 C 튜터입니다.
+사용자가 레벨 테스트를 마치고 메인 학습으로 들어왔습니다.
+테스트 이력을 바탕으로 1차 학습 분석 메시지를 작성하세요.
+
+규칙:
+- 한국어로 작성
+- 4~6문장
+- 강점 1~2개, 보완점 1~2개
+- 마지막 문장은 "이제 같이 본격적으로 C 공부를 시작해봐요."로 끝낼 것
+- 정답이나 정답 코드를 직접 공개하지 말 것`,
+      },
+      {
+        role: 'user',
+        content: `레벨 테스트 이력(JSON):\n${JSON.stringify(analysisInput, null, 2)}`,
+      },
+    ];
+
+    try {
+      if (canUseChatStream) {
+        const requestId = `learning-analysis-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        streamRequestContextsRef.current[requestId] = {
+          meta: { kind: 'learning-initial-analysis' },
+        };
+        setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+        activeChatRequestIdRef.current = requestId;
+        setChatStreaming(true);
+
+        const started = await window.electronAPI.aiChatStream(requestId, analysisMessages);
+        if (!started && activeChatRequestIdRef.current === requestId) {
+          delete streamRequestContextsRef.current[requestId];
+          activeChatRequestIdRef.current = null;
+          setChatStreaming(false);
+          setMessages((prev) => {
+            const next = [...prev];
+            const lastIndex = next.length - 1;
+            if (lastIndex >= 0 && next[lastIndex].role === 'assistant' && next[lastIndex].content.trim() === '') {
+              next.pop();
+            }
+            return next;
+          });
+          const fallbackAnalysis = await window.electronAPI.aiChat(analysisMessages);
+          const fallbackMessage = fallbackAnalysis.trim();
+          if (fallbackMessage) {
+            setMessages((prev) => [...prev, { role: 'assistant', content: fallbackMessage }]);
+            await persistConversationMessage(
+              'assistant',
+              fallbackMessage,
+              undefined,
+              { kind: 'learning-initial-analysis' },
+            );
+          } else {
+            setAssistantErrorMessage('죄송해요, 학습 분석을 생성하는 중 오류가 발생했어요.');
+          }
+        }
+        return;
+      }
+
+      const analysis = await window.electronAPI.aiChat(analysisMessages);
+
+      const message = analysis.trim();
+      if (!message) return;
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: message }]);
+      await persistConversationMessage(
+        'assistant',
+        message,
+        undefined,
+        { kind: 'learning-initial-analysis' },
+      );
+    } catch (analysisError) {
+      console.error('[LevelTest] Failed to generate initial learning analysis:', analysisError);
+      learningAnalysisOnceRef.current = false;
+    }
+  }, [canUseChatStream, isPlacementMode, persistConversationMessage]);
   const setAssistantErrorMessage = (content: string) => {
     setMessages((prev) => {
       const next = [...prev];
@@ -201,6 +328,8 @@ export default function LevelTest({
 
     const cleanupDone = window.electronAPI.onAIChatStreamDone(({ requestId, content }) => {
       if (activeChatRequestIdRef.current !== requestId) return;
+      const context = streamRequestContextsRef.current[requestId];
+      delete streamRequestContextsRef.current[requestId];
       activeChatRequestIdRef.current = null;
       setChatStreaming(false);
       setMessages((prev) => {
@@ -217,11 +346,12 @@ export default function LevelTest({
         }
         return next;
       });
-      void persistConversationMessage('assistant', content);
+      void persistConversationMessage('assistant', content, context?.problemIndex, context?.meta);
     });
 
     const cleanupError = window.electronAPI.onAIChatStreamError(({ requestId, error }) => {
       if (activeChatRequestIdRef.current !== requestId) return;
+      delete streamRequestContextsRef.current[requestId];
 
       activeChatRequestIdRef.current = null;
       setChatStreaming(false);
@@ -305,12 +435,13 @@ export default function LevelTest({
       const savedProgress = await window.electronAPI.getStudentProgress();
       if (!isPlacementMode) {
         setProgress(savedProgress);
-        await loadConversationMessages(savedProgress.id);
+        const rows = await loadConversationMessages(savedProgress.id);
         setCurrentProblem(null);
         setCode('');
         setPredictAnswer('');
         setSelectedChoice(null);
         setWaitingForNext(false);
+        void ensureLearningInitialAnalysis(savedProgress, rows);
         return;
       }
 
@@ -353,12 +484,13 @@ export default function LevelTest({
 
           setStarted(true);
           setProgress(savedProgress);
-          await loadConversationMessages(savedProgress.id);
+          const rows = await loadConversationMessages(savedProgress.id);
           setCurrentProblem(null);
           setCode('');
           setPredictAnswer('');
           setSelectedChoice(null);
           setWaitingForNext(false);
+          void ensureLearningInitialAnalysis(savedProgress, rows);
           return;
         }
 
@@ -705,6 +837,9 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
 
       if (canUseChatStream) {
         const requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        streamRequestContextsRef.current[requestId] = {
+          problemIndex: currentProblemId,
+        };
         activeChatRequestIdRef.current = requestId;
         setChatStreaming(true);
 
@@ -714,6 +849,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
         ]);
 
         if (!started && activeChatRequestIdRef.current === requestId) {
+          delete streamRequestContextsRef.current[requestId];
           activeChatRequestIdRef.current = null;
           setChatStreaming(false);
           setAssistantErrorMessage('죄송해요, 오류가 발생했어요.');
@@ -874,7 +1010,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
           defaultSize={showEditor ? (showProblemPanel ? '34%' : '50%') : (showProblemPanel ? '50%' : '100%')}
           minSize="20%"
         >
-          <div className="h-full flex flex-col">
+          <div className="h-full min-h-0 flex flex-col">
             <ChatPanel
               messages={messages}
               onSendMessage={handleSendMessage}
