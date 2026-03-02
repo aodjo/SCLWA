@@ -78,13 +78,21 @@ export interface SubmissionReviewResult {
  */
 export interface AIProvider {
   /**
-   * Generates a problem based on student progress
+   * Generates a level test problem (5 problems to assess skill level)
    *
    * @param progress - Student's current progress and history
    * @param problemIndex - Current problem number (1-5)
    * @returns Promise resolving to Semi's response
    */
-  generateProblem(progress: StudentProgress, problemIndex: number): Promise<SemiResponse>;
+  generateLevelTestProblem(progress: StudentProgress, problemIndex: number): Promise<SemiResponse>;
+
+  /**
+   * Generates a learning problem (concept-based progressive learning)
+   *
+   * @param progress - Student's current progress and history
+   * @returns Promise resolving to Semi's response
+   */
+  generateLearningProblem(progress: StudentProgress): Promise<SemiResponse>;
 
   /**
    * Sends chat messages and gets AI response

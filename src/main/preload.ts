@@ -47,14 +47,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('ai-init', provider, apiKey),
 
   /**
-   * Generates a problem using AI
+   * Generates a level test problem using AI
    *
    * @param progress - Student's current progress
    * @param problemIndex - Current problem number (1-5)
    * @returns Promise resolving to Semi's response
    */
-  aiGenerateProblem: (progress: unknown, problemIndex: number) =>
-    ipcRenderer.invoke('ai-generate-problem', progress, problemIndex),
+  aiGenerateLevelTestProblem: (progress: unknown, problemIndex: number) =>
+    ipcRenderer.invoke('ai-generate-level-test-problem', progress, problemIndex),
+
+  /**
+   * Generates a learning problem using AI
+   *
+   * @param progress - Student's current progress
+   * @returns Promise resolving to Semi's response
+   */
+  aiGenerateLearningProblem: (progress: unknown) =>
+    ipcRenderer.invoke('ai-generate-learning-problem', progress),
 
   /**
    * Sends chat messages to AI

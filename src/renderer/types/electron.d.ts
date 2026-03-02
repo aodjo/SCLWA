@@ -112,7 +112,8 @@ export interface ElectronAPI {
 
   // AI
   aiInit: (provider: string, apiKey: string) => Promise<boolean>;
-  aiGenerateProblem: (progress: StudentProgress, problemIndex: number) => Promise<SemiResponse>;
+  aiGenerateLevelTestProblem: (progress: StudentProgress, problemIndex: number) => Promise<SemiResponse>;
+  aiGenerateLearningProblem: (progress: StudentProgress) => Promise<SemiResponse>;
   aiChat: (messages: ChatMessage[]) => Promise<string>;
   aiReviewSubmission: (input: SubmissionReviewInput) => Promise<SubmissionReviewResult>;
   aiChatStream: (requestId: string, messages: ChatMessage[]) => Promise<boolean>;

@@ -547,7 +547,9 @@ export default function LevelTest({
         setHintsUsed(0);
         setWaitingForNext(false);
       } else {
-        const response = await window.electronAPI.aiGenerateProblem(currentProgress, problemIndex);
+        const response = isPlacementMode
+          ? await window.electronAPI.aiGenerateLevelTestProblem(currentProgress, problemIndex)
+          : await window.electronAPI.aiGenerateLearningProblem(currentProgress);
 
         console.log('[LevelTest] Response:', response);
         console.log('[LevelTest] Problem:', response.problem);
