@@ -118,6 +118,17 @@ export async function initDatabase(): Promise<void> {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS generated_problems (
+      progress_id INTEGER NOT NULL,
+      problem_index INTEGER NOT NULL,
+      problem_json TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (progress_id, problem_index),
+      FOREIGN KEY (progress_id) REFERENCES student_progress(id)
+    )
+  `);
+
   migrateProblemHistorySchema();
   ensureProblemHistoryToolLogColumn();
   saveDatabase();
@@ -495,6 +506,79 @@ export function getConversationMessages(progressId: number): ConversationMessage
 
   stmt.free();
   return messages;
+}
+
+/**
+ * Saves a generated problem cache for one progress/index
+ *
+ * @param progressId - Student progress ID
+ * @param problemIndex - Problem index (1-based)
+ * @param problem - Generated problem payload
+ */
+export function saveGeneratedProblem(
+  progressId: number,
+  problemIndex: number,
+  problem: unknown,
+): void {
+  if (!db) throw new Error('Database not initialized');
+
+  db.run(
+    `INSERT INTO generated_problems (progress_id, problem_index, problem_json)
+     VALUES (?, ?, ?)
+     ON CONFLICT(progress_id, problem_index) DO UPDATE SET
+       problem_json = excluded.problem_json`,
+    [progressId, problemIndex, JSON.stringify(problem)],
+  );
+
+  saveDatabase();
+}
+
+/**
+ * Gets one cached generated problem for progress/index
+ *
+ * @param progressId - Student progress ID
+ * @param problemIndex - Problem index (1-based)
+ * @returns Parsed problem object or null
+ */
+export function getGeneratedProblem<T = unknown>(progressId: number, problemIndex: number): T | null {
+  if (!db) throw new Error('Database not initialized');
+
+  const stmt = db.prepare(
+    'SELECT problem_json FROM generated_problems WHERE progress_id = ? AND problem_index = ? LIMIT 1',
+  );
+  stmt.bind([progressId, problemIndex]);
+
+  let cached: T | null = null;
+  if (stmt.step()) {
+    const row = stmt.getAsObject() as { problem_json: string | null };
+    if (row.problem_json) {
+      try {
+        cached = JSON.parse(row.problem_json) as T;
+      } catch {
+        cached = null;
+      }
+    }
+  }
+
+  stmt.free();
+  return cached;
+}
+
+/**
+ * Deletes one cached generated problem for progress/index
+ *
+ * @param progressId - Student progress ID
+ * @param problemIndex - Problem index (1-based)
+ */
+export function deleteGeneratedProblem(progressId: number, problemIndex: number): void {
+  if (!db) throw new Error('Database not initialized');
+
+  db.run(
+    'DELETE FROM generated_problems WHERE progress_id = ? AND problem_index = ?',
+    [progressId, problemIndex],
+  );
+
+  saveDatabase();
 }
 
 /**

@@ -276,6 +276,27 @@ function normalizeEscapedCode(value: string): string {
   return out;
 }
 
+function sanitizeChoiceText(choice: string): string {
+  if (!choice) return '';
+
+  let next = choice;
+  next = next.replace(/\s*\((?:정답|정답입니다|correct|answer)\)\s*/gi, ' ');
+  next = next.replace(/\s*\[(?:정답|correct|answer)\]\s*/gi, ' ');
+  next = next.replace(/^(?:정답|correct)\s*[:：-]\s*/i, '');
+  next = next.replace(/\s*(?:정답|correct)\s*[:：-]\s*$/i, '');
+  return next.replace(/\s{2,}/g, ' ').trim();
+}
+
+function sanitizeChoices(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((choice) => {
+    const original = typeof choice === 'string' ? choice : String(choice ?? '');
+    const sanitized = sanitizeChoiceText(original);
+    return sanitized || original.trim();
+  });
+}
+
 const GUIDE_ANCHOR_PATTERN = /\[\[\(guide-anchor[\w-]*\):\([^)]+\)\]\]/;
 const NO_INPUT = '(no input)';
 const EXTRACTION_FAILED = '(failed to extract fill-blank answer)';
@@ -440,20 +461,22 @@ export class OpenAIProvider implements AIProvider {
             attachments: { editable: false, runnable: false },
           };
         } else if (funcName === 'generate_find_bug_problem') {
+          const cleanedChoices = sanitizeChoices(args.choices);
           result.problem = {
             type: 'find-bug',
             question: args.question,
             code: normalizeEscapedCode(args.code),
             answer: args.answer,
-            attachments: { choices: args.choices, editable: false, runnable: false },
+            attachments: { choices: cleanedChoices, editable: false, runnable: false },
           };
         } else if (funcName === 'generate_multiple_choice_problem') {
+          const cleanedChoices = sanitizeChoices(args.choices);
           result.problem = {
             type: 'multiple-choice',
             question: args.question,
             code: normalizeEscapedCode(args.code),
             answer: args.answer,
-            attachments: { choices: args.choices, editable: false, runnable: false },
+            attachments: { choices: cleanedChoices, editable: false, runnable: false },
           };
         }
       }

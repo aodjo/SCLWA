@@ -124,6 +124,9 @@ export interface ElectronAPI {
   getStudentProgress: () => Promise<StudentProgress>;
   saveStudentProgress: (progress: StudentProgress) => Promise<void>;
   saveProblemRecord: (progressId: number, record: ProblemRecord) => Promise<void>;
+  saveGeneratedProblem: (progressId: number, problemIndex: number, problem: Problem) => Promise<void>;
+  getGeneratedProblem: (progressId: number, problemIndex: number) => Promise<Problem | null>;
+  deleteGeneratedProblem: (progressId: number, problemIndex: number) => Promise<void>;
   saveConversationMessage: (
     progressId: number,
     payload: { sender: 'user' | 'assistant' | 'system'; message: string; problemIndex?: number; meta?: unknown }

@@ -230,6 +230,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-problem-record', progressId, record),
 
   /**
+   * Saves one generated problem cache entry
+   *
+   * @param progressId - Student progress ID
+   * @param problemIndex - Problem index (1-based)
+   * @param problem - Generated problem payload
+   * @returns Promise resolving when saved
+   */
+  saveGeneratedProblem: (progressId: number, problemIndex: number, problem: unknown) =>
+    ipcRenderer.invoke('save-generated-problem', progressId, problemIndex, problem),
+
+  /**
+   * Gets one cached generated problem
+   *
+   * @param progressId - Student progress ID
+   * @param problemIndex - Problem index (1-based)
+   * @returns Promise resolving to cached payload or null
+   */
+  getGeneratedProblem: (progressId: number, problemIndex: number) =>
+    ipcRenderer.invoke('get-generated-problem', progressId, problemIndex),
+
+  /**
+   * Deletes one cached generated problem
+   *
+   * @param progressId - Student progress ID
+   * @param problemIndex - Problem index (1-based)
+   * @returns Promise resolving when deleted
+   */
+  deleteGeneratedProblem: (progressId: number, problemIndex: number) =>
+    ipcRenderer.invoke('delete-generated-problem', progressId, problemIndex),
+
+  /**
    * Saves one conversation message
    *
    * @param progressId - Student progress ID

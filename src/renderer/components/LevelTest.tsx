@@ -33,6 +33,35 @@ interface ProblemResult {
 
 const TOTAL_PROBLEMS = 5;
 
+function sanitizeChoiceText(choice: string): string {
+  if (!choice) return '';
+
+  let next = choice;
+  next = next.replace(/\s*\((?:정답|정답입니다|correct|answer)\)\s*/gi, ' ');
+  next = next.replace(/\s*\[(?:정답|correct|answer)\]\s*/gi, ' ');
+  next = next.replace(/^(?:정답|correct)\s*[:：-]\s*/i, '');
+  next = next.replace(/\s*(?:정답|correct)\s*[:：-]\s*$/i, '');
+  return next.replace(/\s{2,}/g, ' ').trim();
+}
+
+function sanitizeProblemChoices(problem: BaseProblem): BaseProblem {
+  const rawChoices = problem.attachments?.choices;
+  if (!rawChoices || rawChoices.length === 0) return problem;
+
+  const cleanedChoices = rawChoices.map((choice) => {
+    const cleaned = sanitizeChoiceText(choice);
+    return cleaned || choice.trim();
+  });
+
+  return {
+    ...problem,
+    attachments: {
+      ...problem.attachments,
+      choices: cleanedChoices,
+    },
+  };
+}
+
 /**
  * Level test component for evaluating user's C programming skills
  *
@@ -336,26 +365,40 @@ export default function LevelTest() {
 
     try {
       const problemIndex = currentProgress.history.length + 1;
-      const response = await window.electronAPI.aiGenerateProblem(currentProgress, problemIndex);
+      const cachedProblem = await window.electronAPI.getGeneratedProblem(currentProgress.id, problemIndex);
 
-      console.log('[LevelTest] Response:', response);
-      console.log('[LevelTest] Problem:', response.problem);
-
-      if (response.problem) {
-        const problem = response.problem;
-        setCurrentProblem({ ...problem, id: problemIndex });
-        setCode(problem.code || '');
+      if (cachedProblem) {
+        const sanitizedCachedProblem = sanitizeProblemChoices(cachedProblem);
+        console.log('[LevelTest] Loaded cached problem:', { problemIndex, type: sanitizedCachedProblem.type });
+        setCurrentProblem({ ...sanitizedCachedProblem, id: problemIndex });
+        setCode(sanitizedCachedProblem.code || '');
         setPredictAnswer('');
         setSelectedChoice(null);
         setHintsUsed(0);
         setWaitingForNext(false);
-
-        if (response.message) {
-          setMessages((prev) => [...prev, { role: 'assistant', content: response.message! }]);
-          void persistConversationMessage('assistant', response.message, problemIndex);
-        }
       } else {
-        throw new Error('No problem generated');
+        const response = await window.electronAPI.aiGenerateProblem(currentProgress, problemIndex);
+
+        console.log('[LevelTest] Response:', response);
+        console.log('[LevelTest] Problem:', response.problem);
+
+        if (response.problem) {
+          const problem = sanitizeProblemChoices(response.problem);
+          await window.electronAPI.saveGeneratedProblem(currentProgress.id, problemIndex, problem);
+          setCurrentProblem({ ...problem, id: problemIndex });
+          setCode(problem.code || '');
+          setPredictAnswer('');
+          setSelectedChoice(null);
+          setHintsUsed(0);
+          setWaitingForNext(false);
+
+          if (response.message) {
+            setMessages((prev) => [...prev, { role: 'assistant', content: response.message! }]);
+            void persistConversationMessage('assistant', response.message, problemIndex);
+          }
+        } else {
+          throw new Error('No problem generated');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate problem');
@@ -393,6 +436,7 @@ export default function LevelTest() {
     };
 
     await window.electronAPI.saveProblemRecord(progress.id, record);
+    await window.electronAPI.deleteGeneratedProblem(progress.id, currentProblem.id);
 
     const updatedProgress: StudentProgress = {
       ...progress,
@@ -547,6 +591,7 @@ export default function LevelTest() {
       };
 
       await window.electronAPI.saveProblemRecord(progress.id, record);
+      await window.electronAPI.deleteGeneratedProblem(progress.id, currentProblem.id);
 
       const updatedProgress: StudentProgress = {
         ...progress,

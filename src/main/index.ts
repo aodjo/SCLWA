@@ -8,11 +8,14 @@ import {
   getStudentProgress,
   saveStudentProgress,
   saveProblemRecord,
+  saveGeneratedProblem,
+  getGeneratedProblem,
+  deleteGeneratedProblem,
   getConversationMessages,
   saveConversationMessage,
   resetStudentProgress,
 } from './database';
-import { aiAdapter, Message, StudentProgress, ProblemRecord, ProviderType, SubmissionReviewInput } from './ai';
+import { aiAdapter, Message, StudentProgress, ProblemRecord, Problem, ProviderType, SubmissionReviewInput } from './ai';
 import { codeExecutor } from './docker';
 
 /**
@@ -253,6 +256,44 @@ ipcMain.handle('save-student-progress', (_, progress: StudentProgress) => {
  */
 ipcMain.handle('save-problem-record', (_, progressId: number, record: ProblemRecord) => {
   saveProblemRecord(progressId, record);
+});
+
+/**
+ * IPC handler to cache a generated problem
+ *
+ * @param _ - IPC event (unused)
+ * @param progressId - Student progress ID
+ * @param problemIndex - Problem index (1-based)
+ * @param problem - Generated problem payload
+ */
+ipcMain.handle(
+  'save-generated-problem',
+  (_, progressId: number, problemIndex: number, problem: Problem) => {
+    saveGeneratedProblem(progressId, problemIndex, problem);
+  },
+);
+
+/**
+ * IPC handler to retrieve cached generated problem
+ *
+ * @param _ - IPC event (unused)
+ * @param progressId - Student progress ID
+ * @param problemIndex - Problem index (1-based)
+ * @returns Cached problem payload or null
+ */
+ipcMain.handle('get-generated-problem', (_, progressId: number, problemIndex: number) => {
+  return getGeneratedProblem<Problem>(progressId, problemIndex);
+});
+
+/**
+ * IPC handler to delete cached generated problem
+ *
+ * @param _ - IPC event (unused)
+ * @param progressId - Student progress ID
+ * @param problemIndex - Problem index (1-based)
+ */
+ipcMain.handle('delete-generated-problem', (_, progressId: number, problemIndex: number) => {
+  deleteGeneratedProblem(progressId, problemIndex);
 });
 
 /**
