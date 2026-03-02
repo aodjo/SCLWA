@@ -72,6 +72,19 @@ export interface SemiResponse {
   problem?: Problem;
 }
 
+export interface SubmissionReviewInput {
+  problemType: ProblemType;
+  question: string;
+  problemCode?: string;
+  userCode: string;
+  testCases: TestCase[];
+}
+
+export interface SubmissionReviewResult {
+  passed: boolean;
+  feedback: string;
+}
+
 export interface ElectronAPI {
   // Window controls
   minimize: () => void;
@@ -86,6 +99,7 @@ export interface ElectronAPI {
   aiInit: (provider: string, apiKey: string) => Promise<boolean>;
   aiGenerateProblem: (progress: StudentProgress, problemIndex: number) => Promise<SemiResponse>;
   aiChat: (messages: ChatMessage[]) => Promise<string>;
+  aiReviewSubmission: (input: SubmissionReviewInput) => Promise<SubmissionReviewResult>;
   aiChatStream: (requestId: string, messages: ChatMessage[]) => Promise<boolean>;
   onAIChatStreamDelta: (callback: (payload: { requestId: string; delta: string }) => void) => () => void;
   onAIChatStreamDone: (callback: (payload: { requestId: string; content: string }) => void) => () => void;

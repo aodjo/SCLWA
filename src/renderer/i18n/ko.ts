@@ -45,7 +45,7 @@ export default {
     title: '문제',
     loading: '문제를 불러오고 있어요...',
     progress: '문제 {{current}} / {{total}}',
-    testCasesTitle: '채점 기준 (테스트 케이스)',
+    testCasesTitle: '테스트 케이스',
     testCasesHint: '아래 입력/출력을 만족하도록 코드를 작성하면 정답으로 처리됩니다.',
     inputLabel: '입력',
     expectedLabel: '예상 출력',

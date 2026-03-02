@@ -280,10 +280,44 @@ export default function LevelTest() {
       }
 
       const { correct, userAnswer } = gradeResult;
+      let finalCorrect = correct;
+      let reviewFeedback: string | null = null;
+
+      const dockerPassed = gradeResult.details?.testResults?.allPassed === true;
+      const hasTestCases = (currentProblem.testCases?.length ?? 0) > 0;
+      const needsAbuseReview = type === 'fill-blank' && hasTestCases && dockerPassed;
+      if (needsAbuseReview) {
+        try {
+          const review = await window.electronAPI.aiReviewSubmission({
+            problemType: currentProblem.type,
+            question: currentProblem.question,
+            problemCode: currentProblem.code,
+            userCode: code,
+            testCases: currentProblem.testCases || [],
+          });
+
+          reviewFeedback = review.feedback;
+          if (!review.passed) {
+            finalCorrect = false;
+          }
+        } catch (reviewError) {
+          console.error('[LevelTest] Submission review failed:', reviewError);
+          throw (reviewError instanceof Error ? reviewError : new Error(String(reviewError)));
+        }
+      }
+
+      if (needsAbuseReview && !finalCorrect) {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: reviewFeedback || '제출이 거절되었습니다. 코드를 수정해서 다시 제출하세요.' },
+        ]);
+        setWaitingForNext(false);
+        return;
+      }
 
       const problemResult: ProblemResult = {
         problem: currentProblem,
-        correct,
+        correct: finalCorrect,
         userAnswer,
       };
 
@@ -295,7 +329,7 @@ export default function LevelTest() {
         difficulty: currentProblem.difficulty,
         question: currentProblem.question,
         code: currentProblem.code,
-        correct,
+        correct: finalCorrect,
         userAnswer,
         hintsUsed,
         chatLog: messages,
@@ -306,16 +340,18 @@ export default function LevelTest() {
       const updatedProgress: StudentProgress = {
         ...progress,
         totalProblems: progress.totalProblems + 1,
-        totalCorrect: progress.totalCorrect + (correct ? 1 : 0),
+        totalCorrect: progress.totalCorrect + (finalCorrect ? 1 : 0),
         history: [...progress.history, record],
       };
 
       setProgress(updatedProgress);
       await window.electronAPI.saveStudentProgress(updatedProgress);
 
-      const feedbackMessage = correct
-        ? '🎉 정답이에요! 잘했어요.'
-        : `😢 아쉬워요. ${currentProblem.solutionCode ? '정답 코드를 확인해보세요.' : '다음에 다시 도전해봐요!'}`;
+      const feedbackMessage = reviewFeedback
+        ? reviewFeedback
+        : finalCorrect
+          ? '🎉 정답이에요! 잘했어요.'
+          : `😢 아쉬워요. ${currentProblem.solutionCode ? '정답 코드를 확인해보세요.' : '다음에 다시 도전해봐요!'}`;
       setMessages((prev) => [...prev, { role: 'assistant', content: feedbackMessage }]);
 
       if (updatedProgress.history.length >= TOTAL_PROBLEMS) {

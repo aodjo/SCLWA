@@ -1,4 +1,4 @@
-import { AIProvider, Message, StudentProgress, SemiResponse } from './types';
+import { AIProvider, Message, StudentProgress, SemiResponse, SubmissionReviewInput, SubmissionReviewResult } from './types';
 import { OpenAIProvider } from './providers/openai';
 
 export type ProviderType = 'openai' | 'gemini' | 'claude';
@@ -81,6 +81,19 @@ export class AIAdapter {
       throw new Error('No AI provider set');
     }
     return this.provider.chatStream(messages, onDelta);
+  }
+
+  /**
+   * Reviews a submission for potential abuse/hardcoding
+   *
+   * @param input - Submission payload
+   * @returns Pass/reject decision with feedback
+   */
+  async reviewSubmission(input: SubmissionReviewInput): Promise<SubmissionReviewResult> {
+    if (!this.provider) {
+      throw new Error('No AI provider set');
+    }
+    return this.provider.reviewSubmission(input);
   }
 }
 

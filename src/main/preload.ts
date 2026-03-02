@@ -66,6 +66,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('ai-chat', messages),
 
   /**
+   * Reviews whether a submission is abusive
+   *
+   * @param input - Submission review payload
+   * @returns Promise resolving to pass/reject review result
+   */
+  aiReviewSubmission: (input: {
+    problemType: string;
+    question: string;
+    problemCode?: string;
+    userCode: string;
+    testCases: { input: string; expected: string }[];
+  }) => ipcRenderer.invoke('ai-review-submission', input),
+
+  /**
    * Starts streaming AI chat response
    *
    * @param requestId - Unique request identifier

@@ -55,6 +55,19 @@ export interface SemiResponse {
   problem?: Problem;
 }
 
+export interface SubmissionReviewInput {
+  problemType: ProblemType;
+  question: string;
+  problemCode?: string;
+  userCode: string;
+  testCases: TestCase[];
+}
+
+export interface SubmissionReviewResult {
+  passed: boolean;
+  feedback: string;
+}
+
 /**
  * Common interface for AI providers
  */
@@ -84,4 +97,12 @@ export interface AIProvider {
    * @returns Promise resolving to final concatenated response
    */
   chatStream(messages: Message[], onDelta: (delta: string) => void): Promise<string>;
+
+  /**
+   * Reviews whether a submitted solution is legitimate or abusive
+   *
+   * @param input - Submission payload to review
+   * @returns Pass/reject decision with feedback
+   */
+  reviewSubmission(input: SubmissionReviewInput): Promise<SubmissionReviewResult>;
 }
