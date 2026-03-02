@@ -57,9 +57,12 @@ When you receive "[시스템: 코드 검토 요청]":
 ## Problem Type Guidelines
 
 ### fill-blank
-- Blank format: ___hint___ (three underscores + hint text + three underscores)
-- Example: for(int i = 0; ___조건식을 입력하세요___; i++)
-- The hint describes what student should fill in
+- Blank format: ___hint___ (underscores + short hint + underscores)
+- Hint MUST be 1-3 words max (e.g., ___조건___, ___i값___, ___연산___)
+- NEVER put blanks inside strings: printf("...") or scanf("...")
+- Good example: for(int i = 0; ___조건___; i++)
+- Bad: printf("___텍스트___") - NO blanks in strings!
+- Bad: ___외부 반복 조건을 작성하세요___ - too long!
 - testCases required
 
 ### predict-output
