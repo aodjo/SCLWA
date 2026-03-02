@@ -105,6 +105,19 @@ export async function initDatabase(): Promise<void> {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS conversation_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      progress_id INTEGER NOT NULL,
+      sender TEXT NOT NULL,
+      message TEXT NOT NULL,
+      problem_index INTEGER,
+      meta TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (progress_id) REFERENCES student_progress(id)
+    )
+  `);
+
   migrateProblemHistorySchema();
   ensureProblemHistoryToolLogColumn();
   saveDatabase();
@@ -252,6 +265,16 @@ interface StudentProgress {
   history: ProblemRecord[];
 }
 
+interface ConversationMessage {
+  id: number;
+  progressId: number;
+  sender: string;
+  message: string;
+  problemIndex?: number;
+  meta?: unknown;
+  createdAt: string;
+}
+
 /**
  * Gets or creates student progress record
  *
@@ -384,6 +407,94 @@ export function saveProblemRecord(progressId: number, record: ProblemRecord): vo
   );
 
   saveDatabase();
+}
+
+/**
+ * Saves one conversation message
+ *
+ * @param progressId - Student progress ID
+ * @param sender - Message sender (user/assistant/system)
+ * @param message - Message content
+ * @param problemIndex - Optional problem index context
+ * @param meta - Optional structured metadata
+ * @returns Inserted message ID
+ */
+export function saveConversationMessage(
+  progressId: number,
+  sender: string,
+  message: string,
+  problemIndex?: number,
+  meta?: unknown,
+): number {
+  if (!db) throw new Error('Database not initialized');
+
+  db.run(
+    `INSERT INTO conversation_messages
+     (progress_id, sender, message, problem_index, meta)
+     VALUES (?, ?, ?, ?, ?)`,
+    [
+      progressId,
+      sender,
+      message,
+      typeof problemIndex === 'number' ? problemIndex : null,
+      meta === undefined ? null : JSON.stringify(meta),
+    ],
+  );
+
+  const result = db.exec('SELECT last_insert_rowid() as id');
+  saveDatabase();
+  return result[0].values[0][0] as number;
+}
+
+/**
+ * Gets all conversation messages for one progress
+ *
+ * @param progressId - Student progress ID
+ * @returns Ordered conversation messages
+ */
+export function getConversationMessages(progressId: number): ConversationMessage[] {
+  if (!db) throw new Error('Database not initialized');
+
+  const stmt = db.prepare(
+    'SELECT id, progress_id, sender, message, problem_index, meta, created_at FROM conversation_messages WHERE progress_id = ? ORDER BY id',
+  );
+  stmt.bind([progressId]);
+
+  const messages: ConversationMessage[] = [];
+
+  while (stmt.step()) {
+    const row = stmt.getAsObject() as {
+      id: number;
+      progress_id: number;
+      sender: string;
+      message: string;
+      problem_index: number | null;
+      meta: string | null;
+      created_at: string;
+    };
+
+    let parsedMeta: unknown = undefined;
+    if (row.meta) {
+      try {
+        parsedMeta = JSON.parse(row.meta);
+      } catch {
+        parsedMeta = undefined;
+      }
+    }
+
+    messages.push({
+      id: row.id,
+      progressId: row.progress_id,
+      sender: row.sender,
+      message: row.message,
+      problemIndex: row.problem_index ?? undefined,
+      meta: parsedMeta,
+      createdAt: row.created_at,
+    });
+  }
+
+  stmt.free();
+  return messages;
 }
 
 /**

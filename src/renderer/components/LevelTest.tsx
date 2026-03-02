@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import ProblemPanel from './ProblemPanel';
@@ -40,6 +40,7 @@ const TOTAL_PROBLEMS = 5;
  */
 export default function LevelTest() {
   const { t } = useTranslation();
+  const [restoringProgress, setRestoringProgress] = useState(true);
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<StudentProgress | null>(null);
@@ -58,6 +59,9 @@ export default function LevelTest() {
   const [chatStreaming, setChatStreaming] = useState(false);
   const activeChatRequestIdRef = useRef<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressRef = useRef<StudentProgress | null>(null);
+  const currentProblemRef = useRef<Problem | null>(null);
+  const restoreOnceRef = useRef(false);
 
   const showEditor = !!currentProblem;
   const hasCode = !!currentProblem?.code;
@@ -77,6 +81,40 @@ export default function LevelTest() {
     typeof window.electronAPI.onAIChatStreamDelta === 'function' &&
     typeof window.electronAPI.onAIChatStreamDone === 'function' &&
     typeof window.electronAPI.onAIChatStreamError === 'function';
+  const persistConversationMessage = useCallback(async (
+    sender: ChatMessage['role'],
+    content: string,
+    overrideProblemIndex?: number,
+  ) => {
+    if (!content.trim()) return;
+    const activeProgress = progressRef.current;
+    if (!activeProgress?.id) return;
+
+    try {
+      await window.electronAPI.saveConversationMessage(activeProgress.id, {
+        sender,
+        message: content,
+        problemIndex: overrideProblemIndex ?? currentProblemRef.current?.id,
+      });
+    } catch (saveError) {
+      console.error('[LevelTest] Failed to save conversation message:', saveError);
+    }
+  }, []);
+  const loadConversationMessages = useCallback(async (progressId: number) => {
+    try {
+      const rows = await window.electronAPI.getConversationMessages(progressId);
+      const restored: ChatMessage[] = rows
+        .filter((row) => row.sender === 'user' || row.sender === 'assistant' || row.sender === 'system')
+        .map((row) => ({
+          role: row.sender,
+          content: row.message,
+        }));
+      setMessages(restored);
+    } catch (loadError) {
+      console.error('[LevelTest] Failed to load conversation messages:', loadError);
+      setMessages([]);
+    }
+  }, []);
   const setAssistantErrorMessage = (content: string) => {
     setMessages((prev) => {
       const next = [...prev];
@@ -87,7 +125,16 @@ export default function LevelTest() {
       }
       return [...next, { role: 'assistant', content }];
     });
+    void persistConversationMessage('assistant', content);
   };
+
+  useEffect(() => {
+    progressRef.current = progress;
+  }, [progress]);
+
+  useEffect(() => {
+    currentProblemRef.current = currentProblem;
+  }, [currentProblem]);
 
   useEffect(() => {
     if (!canUseChatStream) return;
@@ -112,10 +159,25 @@ export default function LevelTest() {
       });
     });
 
-    const cleanupDone = window.electronAPI.onAIChatStreamDone(({ requestId }) => {
+    const cleanupDone = window.electronAPI.onAIChatStreamDone(({ requestId, content }) => {
       if (activeChatRequestIdRef.current !== requestId) return;
       activeChatRequestIdRef.current = null;
       setChatStreaming(false);
+      setMessages((prev) => {
+        const next = [...prev];
+        const assistantIndex = next.map((msg) => msg.role).lastIndexOf('assistant');
+
+        if (assistantIndex === -1) {
+          next.push({ role: 'assistant', content });
+          return next;
+        }
+
+        if (next[assistantIndex].content.trim() === '' && content.trim()) {
+          next[assistantIndex] = { role: 'assistant', content };
+        }
+        return next;
+      });
+      void persistConversationMessage('assistant', content);
     });
 
     const cleanupError = window.electronAPI.onAIChatStreamError(({ requestId, error }) => {
@@ -131,7 +193,7 @@ export default function LevelTest() {
       cleanupDone();
       cleanupError();
     };
-  }, [canUseChatStream]);
+  }, [canUseChatStream, persistConversationMessage]);
 
   useEffect(() => {
     return () => {
@@ -159,35 +221,109 @@ export default function LevelTest() {
     setSelectedChoice(index);
   };
 
+  const toProblemResults = (history: ProblemRecord[]): ProblemResult[] => {
+    return history.map((record, index) => ({
+      problem: {
+        id: index + 1,
+        type: record.type,
+        question: record.question,
+        code: record.code,
+      },
+      correct: record.correct,
+      userAnswer: record.userAnswer,
+    }));
+  };
+
+  const initializeAI = useCallback(async (): Promise<boolean> => {
+    const configs = await window.electronAPI.getAIConfigs();
+    const enabledConfig = configs.find((c) => c.enabled && c.apiKey);
+
+    if (!enabledConfig) {
+      setError(t('levelTest.noApiKey'));
+      return false;
+    }
+
+    await window.electronAPI.aiInit(enabledConfig.provider, enabledConfig.apiKey);
+    return true;
+  }, [t]);
+
   /**
    * Initializes AI provider and starts the test
    */
   const startTest = async () => {
-    setStarted(true);
     setLoading(true);
     setError(null);
 
     try {
-      const configs = await window.electronAPI.getAIConfigs();
-      const enabledConfig = configs.find((c) => c.enabled && c.apiKey);
-
-      if (!enabledConfig) {
-        setError(t('levelTest.noApiKey'));
-        setLoading(false);
+      const initialized = await initializeAI();
+      if (!initialized) {
         return;
       }
 
-      await window.electronAPI.aiInit(enabledConfig.provider, enabledConfig.apiKey);
+      setStarted(true);
+
+      const savedProgress = await window.electronAPI.getStudentProgress();
+      if (savedProgress.history.length >= TOTAL_PROBLEMS) {
+        setProgress(savedProgress);
+        await loadConversationMessages(savedProgress.id);
+        setResults(toProblemResults(savedProgress.history));
+        setFinished(true);
+        return;
+      }
+
+      if (savedProgress.history.length > 0) {
+        setProgress(savedProgress);
+        await loadConversationMessages(savedProgress.id);
+        await generateProblem(savedProgress);
+        return;
+      }
 
       const newProgress = await window.electronAPI.resetStudentProgress();
       setProgress(newProgress);
-
+      setMessages([]);
       await generateProblem(newProgress);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start test');
+    } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (restoreOnceRef.current) return;
+    restoreOnceRef.current = true;
+
+    const restoreProgress = async () => {
+      try {
+        const savedProgress = await window.electronAPI.getStudentProgress();
+        if (savedProgress.history.length >= TOTAL_PROBLEMS) {
+          setStarted(true);
+          setFinished(true);
+          setProgress(savedProgress);
+          await loadConversationMessages(savedProgress.id);
+          setResults(toProblemResults(savedProgress.history));
+          return;
+        }
+
+        if (savedProgress.history.length > 0) {
+          const initialized = await initializeAI();
+          if (!initialized) return;
+
+          setStarted(true);
+          setProgress(savedProgress);
+          await loadConversationMessages(savedProgress.id);
+          await generateProblem(savedProgress);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to restore progress');
+      } finally {
+        setRestoringProgress(false);
+      }
+    };
+
+    void restoreProgress();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initializeAI, loadConversationMessages]);
 
   /**
    * Generates a problem using current progress
@@ -216,6 +352,7 @@ export default function LevelTest() {
 
         if (response.message) {
           setMessages((prev) => [...prev, { role: 'assistant', content: response.message! }]);
+          void persistConversationMessage('assistant', response.message, problemIndex);
         }
       } else {
         throw new Error('No problem generated');
@@ -377,10 +514,12 @@ export default function LevelTest() {
         if (isChoiceProblem) {
           showToast('오답이에요. 선택이 잠겼습니다.');
         } else {
+          const feedback = reviewFeedback || '오답이에요.';
           setMessages((prev) => [
             ...prev,
-            { role: 'assistant', content: reviewFeedback || '오답이에요.' },
+            { role: 'assistant', content: feedback },
           ]);
+          void persistConversationMessage('assistant', feedback, currentProblem.id);
           showToast('오답이에요.');
           setWaitingForNext(false);
           return;
@@ -427,6 +566,7 @@ export default function LevelTest() {
             ? '오답이에요. 이번 선택은 최종 선택으로 잠겼습니다. 다음 문제를 눌러 진행하세요.'
             : `😢 아쉬워요. ${currentProblem.solutionCode ? '정답 코드를 확인해보세요.' : '다음에 다시 도전해봐요!'}`;
       setMessages((prev) => [...prev, { role: 'assistant', content: feedbackMessage }]);
+      void persistConversationMessage('assistant', feedbackMessage, currentProblem.id);
 
       if (updatedProgress.history.length >= TOTAL_PROBLEMS) {
         setFinished(true);
@@ -458,6 +598,7 @@ export default function LevelTest() {
 
     const newMessages: ChatMessage[] = [...messages, { role: 'user', content: message }];
     setMessages([...newMessages, { role: 'assistant', content: '' }]);
+    void persistConversationMessage('user', message, currentProblem.id);
     setHintsUsed((prev) => prev + 1);
 
     try {
@@ -501,6 +642,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
           }
           return [...next, { role: 'assistant', content: response }];
         });
+        void persistConversationMessage('assistant', response, currentProblem.id);
       }
     } catch (err) {
       activeChatRequestIdRef.current = null;
@@ -529,6 +671,19 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
     setToastMessage(null);
   };
 
+  const handleResultAction = () => {
+    // Placeholder until main learning workflow replaces level test screen.
+  };
+
+  if (restoringProgress) {
+    return (
+      <div className="min-h-[calc(100vh-2rem)] flex flex-col items-center justify-center gap-4">
+        <div className="w-8 h-8 border-2 border-zinc-700 border-t-zinc-50 rounded-full animate-spin" />
+        <p className="text-zinc-500">Loading...</p>
+      </div>
+    );
+  }
+
   if (!started) {
     return (
       <div className="min-h-[calc(100vh-2rem)] flex flex-col items-center justify-center gap-6">
@@ -547,7 +702,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
   }
 
   if (isFinished) {
-    return <ResultPanel results={results} onRestart={restartTest} />;
+    return <ResultPanel results={results} onRestart={handleResultAction} />;
   }
 
   if (loading) {

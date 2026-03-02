@@ -44,6 +44,16 @@ export interface ToolCallRecord {
   output: unknown;
 }
 
+export interface ConversationMessageRecord {
+  id: number;
+  progressId: number;
+  sender: 'user' | 'assistant' | 'system';
+  message: string;
+  problemIndex?: number;
+  meta?: unknown;
+  createdAt: string;
+}
+
 export interface StudentProgress {
   id: number;
   studentSummary: string;
@@ -114,6 +124,11 @@ export interface ElectronAPI {
   getStudentProgress: () => Promise<StudentProgress>;
   saveStudentProgress: (progress: StudentProgress) => Promise<void>;
   saveProblemRecord: (progressId: number, record: ProblemRecord) => Promise<void>;
+  saveConversationMessage: (
+    progressId: number,
+    payload: { sender: 'user' | 'assistant' | 'system'; message: string; problemIndex?: number; meta?: unknown }
+  ) => Promise<number>;
+  getConversationMessages: (progressId: number) => Promise<ConversationMessageRecord[]>;
   resetStudentProgress: () => Promise<StudentProgress>;
 
   // Docker

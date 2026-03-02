@@ -230,6 +230,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-problem-record', progressId, record),
 
   /**
+   * Saves one conversation message
+   *
+   * @param progressId - Student progress ID
+   * @param payload - Message payload
+   * @returns Promise resolving to inserted message ID
+   */
+  saveConversationMessage: (
+    progressId: number,
+    payload: { sender: string; message: string; problemIndex?: number; meta?: unknown },
+  ) => ipcRenderer.invoke('save-conversation-message', progressId, payload),
+
+  /**
+   * Gets conversation messages for one progress
+   *
+   * @param progressId - Student progress ID
+   * @returns Promise resolving to ordered conversation messages
+   */
+  getConversationMessages: (progressId: number) =>
+    ipcRenderer.invoke('get-conversation-messages', progressId),
+
+  /**
    * Resets student progress for a new test
    *
    * @returns Promise resolving to new student progress

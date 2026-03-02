@@ -8,6 +8,8 @@ import {
   getStudentProgress,
   saveStudentProgress,
   saveProblemRecord,
+  getConversationMessages,
+  saveConversationMessage,
   resetStudentProgress,
 } from './database';
 import { aiAdapter, Message, StudentProgress, ProblemRecord, ProviderType, SubmissionReviewInput } from './ai';
@@ -251,6 +253,42 @@ ipcMain.handle('save-student-progress', (_, progress: StudentProgress) => {
  */
 ipcMain.handle('save-problem-record', (_, progressId: number, record: ProblemRecord) => {
   saveProblemRecord(progressId, record);
+});
+
+/**
+ * IPC handler to save one conversation message
+ *
+ * @param _ - IPC event (unused)
+ * @param progressId - Student progress ID
+ * @param payload - Message payload
+ * @returns Inserted conversation message ID
+ */
+ipcMain.handle(
+  'save-conversation-message',
+  (
+    _,
+    progressId: number,
+    payload: { sender: string; message: string; problemIndex?: number; meta?: unknown },
+  ) => {
+    return saveConversationMessage(
+      progressId,
+      payload.sender,
+      payload.message,
+      payload.problemIndex,
+      payload.meta,
+    );
+  },
+);
+
+/**
+ * IPC handler to retrieve conversation messages for one progress
+ *
+ * @param _ - IPC event (unused)
+ * @param progressId - Student progress ID
+ * @returns Ordered conversation messages
+ */
+ipcMain.handle('get-conversation-messages', (_, progressId: number) => {
+  return getConversationMessages(progressId);
 });
 
 /**
