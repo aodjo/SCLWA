@@ -58,6 +58,7 @@ function removeBrokenGuideAnchorFragments(source: string): string {
 interface EditorPanelProps {
   code: string;
   onChange: (code: string) => void;
+  initialCode?: string;
   onSubmit?: () => void;
   onPass?: () => void;
   onNext?: () => void;
@@ -82,6 +83,7 @@ interface EditorPanelProps {
 export default function EditorPanel({
   code,
   onChange,
+  initialCode = '',
   onSubmit,
   onPass,
   onNext,
@@ -240,10 +242,10 @@ export default function EditorPanel({
   }, [t]);
 
   /**
-   * Resets the code editor to empty state
+   * Resets the code editor to initial problem state
    */
   const handleReset = () => {
-    onChange('');
+    onChange(initialCode);
     terminalRef.current?.clear();
   };
 
