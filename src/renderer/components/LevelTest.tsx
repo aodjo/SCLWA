@@ -65,6 +65,7 @@ export default function LevelTest() {
   const isRunnable = currentProblem
     ? (currentProblem.attachments?.runnable ?? (currentProblem.type === 'fill-blank'))
     : false;
+  const submitDisabled = !!(currentProblem?.attachments?.choices?.length) && selectedChoice === null;
   const currentIndex = progress?.history.length ?? 0;
   const isFinished = finished || currentIndex >= TOTAL_PROBLEMS;
   const canUseChatStream =
@@ -535,10 +536,6 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
               onSelectChoice={setSelectedChoice}
               predictAnswer={predictAnswer}
               onPredictAnswerChange={setPredictAnswer}
-              onSubmit={submitAnswer}
-              onPass={passCurrentProblem}
-              onNext={goToNextProblem}
-              submitting={submitting}
               waitingForNext={waitingForNext}
             />
           </div>
@@ -557,6 +554,7 @@ ${currentProblem.code ? `코드:\n${currentProblem.code}` : ''}
                   onPass={passCurrentProblem}
                   onNext={goToNextProblem}
                   submitting={submitting}
+                  submitDisabled={submitDisabled}
                   waitingForNext={waitingForNext}
                   readonly={!isEditable}
                   runnable={isRunnable}

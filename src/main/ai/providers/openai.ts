@@ -28,7 +28,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           code: {
             type: 'string',
-            description: '빈칸이 포함된 코드. 빈칸은 [[(guide-anchor):(클릭하여 코드를 완성하세요)]] 또는 [[(guide-anchor1):(클릭하여 코드를 완성하세요)]] 형식으로 표시',
+            description: '빈칸이 포함된 코드. anchor ID는 guide-anchor 또는 guide-anchorN만 허용 (예: [[(guide-anchor):(클릭하여 코드를 완성하세요)]], [[(guide-anchor1):(클릭하여 코드를 완성하세요)]]) . ans1 같은 임의 ID 금지',
           },
           testCases: {
             type: 'array',
@@ -374,7 +374,7 @@ export class OpenAIProvider implements AIProvider {
    * @returns Promise resolving to Semi's response
    */
   async generateProblem(progress: StudentProgress, problemIndex: number): Promise<SemiResponse> {
-    const systemPrompt = buildProblemPrompt(progress, problemIndex);
+    const systemPrompt = buildProblemPrompt();
     const historyConversation = buildHistoryConversation(progress.history);
 
     console.log('[AI] Generating problem for index:', problemIndex);

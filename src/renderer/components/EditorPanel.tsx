@@ -16,6 +16,7 @@ interface EditorPanelProps {
   onPass?: () => void;
   onNext?: () => void;
   submitting?: boolean;
+  submitDisabled?: boolean;
   waitingForNext?: boolean;
   readonly?: boolean;
   runnable?: boolean;
@@ -38,6 +39,7 @@ export default function EditorPanel({
   onPass,
   onNext,
   submitting,
+  submitDisabled,
   waitingForNext,
   readonly,
   runnable = true,
@@ -341,7 +343,7 @@ export default function EditorPanel({
               <Terminal ref={terminalRef} onData={handleTerminalInput} />
             </div>
 
-            {(waitingForNext || !readonly) && (
+            {(waitingForNext || !!onSubmit || !!onPass || !!onNext) && (
               <div className="p-2 border-t border-zinc-700 flex justify-end gap-2">
                 {waitingForNext ? (
                   <button
@@ -363,7 +365,7 @@ export default function EditorPanel({
                     )}
                     <button
                       onClick={onSubmit}
-                      disabled={submitting}
+                      disabled={submitting || submitDisabled}
                       className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 transition-colors cursor-pointer disabled:opacity-50"
                     >
                       {submitting ? t('editor.submitting') : t('editor.submit')}

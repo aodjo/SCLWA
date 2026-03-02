@@ -7,10 +7,6 @@ interface ProblemPanelProps {
   onSelectChoice?: (index: number) => void;
   predictAnswer?: string;
   onPredictAnswerChange?: (value: string) => void;
-  onSubmit?: () => void;
-  onPass?: () => void;
-  onNext?: () => void;
-  submitting?: boolean;
   waitingForNext?: boolean;
 }
 
@@ -22,8 +18,6 @@ interface ProblemPanelProps {
  * @param onSelectChoice - Callback when a choice is selected
  * @param predictAnswer - Current predict output answer
  * @param onPredictAnswerChange - Callback when predict answer changes
- * @param onSubmit - Callback when submitting answer
- * @param submitting - Whether submission is in progress
  * @returns Problem panel component
  */
 export default function ProblemPanel({
@@ -32,10 +26,6 @@ export default function ProblemPanel({
   onSelectChoice,
   predictAnswer,
   onPredictAnswerChange,
-  onSubmit,
-  onPass,
-  onNext,
-  submitting,
   waitingForNext,
 }: ProblemPanelProps) {
   const { t } = useTranslation();
@@ -52,7 +42,6 @@ export default function ProblemPanel({
   const choices = attachments?.choices;
   const testCases = problem.testCases ?? [];
   const showPredictInput = problem.type === 'predict-output' && !choices;
-  const showFooter = waitingForNext || !!onSubmit || !!onPass || !!onNext;
   const showTestCases = testCases.length > 0;
 
   return (
@@ -114,54 +103,19 @@ export default function ProblemPanel({
         )}
       </div>
 
-      {showFooter && (
+      {showPredictInput && !waitingForNext && (
         <div className="border-t border-zinc-200">
-          {showPredictInput && !waitingForNext && (
-            <div className="px-4 py-2 bg-zinc-100 border-b border-zinc-200">
-              <span className="text-sm font-medium text-zinc-700">{t('problem.answerLabel')}</span>
-            </div>
-          )}
-
-          {showPredictInput && !waitingForNext && (
-            <div className="p-4">
-              <textarea
-                value={predictAnswer ?? ''}
-                onChange={(e) => onPredictAnswerChange?.(e.target.value)}
-                placeholder={t('problem.predictPlaceholder')}
-                rows={4}
-                className="w-full resize-y bg-white border border-zinc-200 rounded-md px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 placeholder:text-zinc-400"
-              />
-            </div>
-          )}
-
-          <div className={`p-4 ${!waitingForNext && showPredictInput ? 'pt-0' : ''} flex gap-2`}>
-            {waitingForNext ? (
-              <button
-                onClick={onNext}
-                className="flex-1 bg-zinc-800 text-white rounded-md py-2 text-sm font-medium hover:bg-zinc-700 transition-colors cursor-pointer"
-              >
-                {t('problem.next')}
-              </button>
-            ) : (
-              <>
-                {onPass && (
-                  <button
-                    onClick={onPass}
-                    disabled={submitting}
-                    className="flex-1 bg-zinc-300 text-zinc-700 rounded-md py-2 text-sm font-medium hover:bg-zinc-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {t('problem.pass')}
-                  </button>
-                )}
-                <button
-                  onClick={onSubmit}
-                  disabled={submitting || (choices && choices.length > 0 && selectedChoice === null)}
-                  className="flex-1 bg-zinc-800 text-white rounded-md py-2 text-sm font-medium hover:bg-zinc-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {submitting ? t('problem.submitting') : t('problem.submit')}
-                </button>
-              </>
-            )}
+          <div className="px-4 py-2 bg-zinc-100 border-b border-zinc-200">
+            <span className="text-sm font-medium text-zinc-700">{t('problem.answerLabel')}</span>
+          </div>
+          <div className="p-4">
+            <textarea
+              value={predictAnswer ?? ''}
+              onChange={(e) => onPredictAnswerChange?.(e.target.value)}
+              placeholder={t('problem.predictPlaceholder')}
+              rows={4}
+              className="w-full resize-y bg-white border border-zinc-200 rounded-md px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 placeholder:text-zinc-400"
+            />
           </div>
         </div>
       )}
