@@ -1,41 +1,25 @@
 import { useState, useEffect } from 'react';
 import Settings from './components/Settings';
 import TitleBar from './components/TitleBar';
-import LevelTest from './components/LevelTest';
+import Learning from './components/Learning';
 import './types/electron.d.ts';
-
-type AppMode = 'level-test' | 'learning';
 
 function App() {
   const [showSettings, setShowSettings] = useState(true);
-  const [appMode, setAppMode] = useState<AppMode>('level-test');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     checkSettings();
   }, []);
 
-  const resolveAppMode = async (): Promise<AppMode> => {
-    const progress = await window.electronAPI.getStudentProgress();
-    return (progress.history?.length ?? 0) >= 5 ? 'learning' : 'level-test';
-  };
-
   const checkSettings = async () => {
     try {
       const configs = await window.electronAPI?.getAIConfigs();
       const hasValid = configs?.some((c) => c.enabled && c.apiKey?.trim());
       setShowSettings(!hasValid);
-
-      if (hasValid) {
-        const mode = await resolveAppMode();
-        setAppMode(mode);
-      } else {
-        setAppMode('level-test');
-      }
     } catch (error) {
       console.error('Failed to check settings:', error);
       setShowSettings(true);
-      setAppMode('level-test');
     } finally {
       setLoading(false);
     }
@@ -58,20 +42,12 @@ function App() {
       <div className="pt-8">
         {showSettings ? (
           <Settings
-            onComplete={async () => {
-              const mode = await resolveAppMode();
+            onComplete={() => {
               setShowSettings(false);
-              setAppMode(mode);
             }}
           />
         ) : (
-          <LevelTest
-            key={appMode}
-            mode={appMode}
-            onEnterLearning={() => {
-              setAppMode('learning');
-            }}
-          />
+          <Learning />
         )}
       </div>
     </>

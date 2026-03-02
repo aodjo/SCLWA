@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Problem } from './LevelTest';
+import { Problem } from './Learning';
 
 interface ProblemPanelProps {
   problem: Problem | null;
