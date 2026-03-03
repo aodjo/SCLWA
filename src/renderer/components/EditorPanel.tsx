@@ -67,7 +67,6 @@ export default function EditorPanel({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
-  const sanitizingRef = useRef(false);
   const showActionButtons = waitingForNext || !!onSubmit || !!onPass || !!onNext;
 
   /**
